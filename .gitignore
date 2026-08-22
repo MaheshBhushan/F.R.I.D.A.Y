@@ -1,0 +1,20 @@
+.venv/
+__pycache__/
+*.pyc
+
+# Wake-word training artifacts. ~19GB: a 17GB precomputed negative-feature
+# dump, ~40k synthesised WAV clips, a second venv with CPU torch in it, and
+# the cloned sample generator. All of it is either downloadable or
+# regenerable by training/run.sh, and none of it belongs in git -- committing
+# the feature dump alone would make every future clone of this repo pay 17GB.
+#
+# The trained models themselves are NOT ignored: they live in
+# src/friday/models/*.onnx, are ~850KB each, and are the one artifact that
+# must ship with the code that loads them.
+training/.venv-train/
+training/piper-sample-generator/
+training/data/
+training/clips/
+training/features/
+training/models/
+training/*.log
