@@ -1,0 +1,97 @@
+# FRIDAY voice assistant -- systemd *user* unit.
+#
+# Install:
+#     mkdir -p ~/.config/systemd/user
+#     cp deploy/friday.service ~/.config/systemd/user/
+#     systemctl --user daemon-reload
+#     systemctl --user enable --now friday
+#
+# Check:
+#     systemctl --user status friday
+#     .venv/bin/python -m friday.gateway --smoke
+#     journalctl --user -u friday -f
+#
+# A *user* unit, not a system one, for three reasons: the microphone and the
+# speaker are reached through this user's PipeWire session, ~/.friday/env holds
+# the credentials with user-only permissions, and a system service would need
+# an explicit seat handoff to touch audio at all.
+
+[Unit]
+Description=FRIDAY voice assistant
+Documentation=file:/run/media/maheshk/New%%20Volume1/MK-solutions/friday/GOLIVE.md
+# PipeWire is reached over the session socket, so starting before it is up just
+# produces a failed capture open and a restart loop.
+After=pipewire.service pipewire-pulse.service
+# The project lives on a removable NTFS volume, so the mount is a hard
+# prerequisite: without it ExecStart's interpreter does not exist and systemd
+# retries until the crash-loop brake trips.
+RequiresMountsFor="/run/media/maheshk/New Volume1/MK-solutions/friday"
+Wants=pipewire.service
+# StartLimit* belong to [Unit], not [Service] -- systemd silently ignores them
+# in [Service], which would leave the crash-loop brake quietly disabled.
+StartLimitIntervalSec=300
+StartLimitBurst=10
+
+[Service]
+Type=simple
+
+# NOT EnvironmentFile=. That directive cannot parse `export KEY=value`, which
+# is the format ~/.friday/env uses -- systemd reads the variable name as
+# "export KEY" and silently drops it, so the daemon started with no
+# credentials and the only symptom was voice_loop=false. The app loads the
+# file itself at startup instead (see _load_credentials), which also keeps
+# `friday start` and `systemctl start` behaving identically.
+#
+# Environment= is likewise wrong for secrets: those values are readable via
+# `systemctl show` by anything that can query the bus.
+
+# No tty under systemd, so the ANSI status line has nothing to draw on. The
+# state file and the gateway's state.changed events still work -- the indicator
+# reports through those regardless of this setting.
+Environment=FRIDAY_INDICATOR=0
+Environment=PYTHONUNBUFFERED=1
+
+WorkingDirectory=/run/media/maheshk/New Volume1/MK-solutions/friday
+ExecStart="/run/media/maheshk/New Volume1/MK-solutions/friday/.venv/bin/python" -m friday
+
+# Prove it is actually serving before systemd calls the start a success. A
+# process that booted but cannot answer health is not "running" in any sense
+# the user cares about.
+# --wait is essential, not cautious. Under Type=simple, systemd runs
+# ExecStartPost the moment ExecStart forks -- seconds before the gateway binds
+# its port. Without it, every start failed its own readiness check and
+# Restart=always turned that into a crash loop.
+ExecStartPost="/run/media/maheshk/New Volume1/MK-solutions/friday/.venv/bin/python" -m friday.gateway --smoke --wait 60
+
+# Sweep a leftover module-echo-cancel after the process is gone, however it
+# went. The in-process cleanup handles the normal case, but it cannot run at
+# all if the daemon was SIGKILLed, and it can be abandoned by the bounded
+# shutdown drain if a task refuses to stop. A leaked module renumbers every
+# other application's capture device list -- that is what silently cost Chrome
+# its microphone -- so this backstop is worth a subprocess on every stop.
+# `-` prefix: a failed sweep must not make `systemctl stop` report failure.
+ExecStopPost=-"/run/media/maheshk/New Volume1/MK-solutions/friday/.venv/bin/friday" reap --quiet
+
+Restart=always
+RestartSec=3
+# Ten restarts inside five minutes means it is crash-looping, not recovering.
+# Give up loudly rather than hammering the audio device forever.
+# SIGINT rather than SIGTERM: the app installs a handler that sets the stop
+# event, which unwinds the capture stream and releases the microphone. A hard
+# kill can leave the echo-cancel module loaded, and a leaked virtual source
+# renumbers everyone else's device list -- the bug that broke Chrome.
+KillSignal=SIGINT
+TimeoutStopSec=15
+
+# Hardening. Kept modest on purpose: audio needs the session, so the aggressive
+# sandboxing options would break capture rather than secure it.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+MemoryMax=2G
+
+[Install]
+WantedBy=default.target
