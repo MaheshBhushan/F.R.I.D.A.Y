@@ -14,7 +14,7 @@
 | Reasoning model | Anthropic Claude Opus 5 |
 | Local storage | SQLite with FTS5 full-text search |
 | Control interface | CLI and authenticated WebSocket gateway |
-| Test status | **345 tests passing** on 22 August 2026 |
+| Test status | **367 tests passing** on 23 August 2026 |
 
 ## Aim
 
@@ -160,7 +160,7 @@ Run the automated suite:
 Current result:
 
 ```text
-345 passed in 27.75s
+367 passed in 59.79s
 ```
 
 Useful additional checks:
