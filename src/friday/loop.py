@@ -5,17 +5,9 @@ that makes FRIDAY a process rather than a collection of scripts.
 
 Design notes that are not obvious from the call order:
 
-* **One span per turn, created at detection.** `wake.capture_loop` takes a
-  single span for the whole loop, which is fine for a benchmark and wrong for a
-  daemon, so this module runs its own capture. `speech_started` is marked here
-  the instant `feed_chunk` returns a detection rather than inside it -- the same
-  synchronous tick, and it keeps the wake-latency benchmark's hot path clean.
-
-* **`end_handoff()` lives in a `finally`.** While a handoff is active the
-  detector forwards every frame to the live queue and runs no wake inference,
-  so a turn that raises without re-arming leaves FRIDAY permanently deaf: mic
-  frames pile into a queue nobody drains and no wake word can ever fire again.
-  This is the single most important line in the file.
+* **The STT subscription is created at detection.** This freezes capture's
+  pre-roll and starts retaining pending frames before the task gets a chance to
+  await Deepgram, so connection latency cannot open a gap in the command.
 
 * **Barge-in is the wake word, not a phrase.** `MicGate`'s interrupt phrases
   need a live STT stream, and there is no STT stream while she is speaking
@@ -41,9 +33,11 @@ import argparse
 import asyncio
 import contextlib
 import os
+import re
 import sys
 import time
 from dataclasses import dataclass, field
+from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Optional
 
@@ -53,8 +47,13 @@ from friday.core.spans import DEFAULT_SPANS_PATH, TurnSpan
 from friday.router import Tier
 from friday.tiers import state_query
 from friday.voice import ack as ack_mod
-from friday.audio import AudioResourceManager, MicState, Owner
-from friday.voice import devices, indicator, stt, tts, wake
+from friday.audio import (
+    AudioCaptureService,
+    AudioResourceManager,
+    AudioSubscription,
+    MicState,
+)
+from friday.voice import indicator, stt, tts, wake
 
 # Ack chosen per tier. Reflex turns get a short confirmation; reasoning turns
 # get one that licenses a wait, since that is exactly what follows.
@@ -63,6 +62,26 @@ ACK_REASONING = "checking"
 
 # Tier 1 actions that are answered entirely by playing an ack.
 _ACK_ONLY_ACTIONS = {"noop_ack": "yes", "pause_turn": "one_moment"}
+
+CONVERSATION_SECONDS = 15.0
+_WAKE_PREFIX = re.compile(
+    r"^\s*(?:(?:hey|okay)\s+)?friday[\s,.:;!?-]*", re.IGNORECASE
+)
+
+
+class AudioTurnState(Enum):
+    IDLE = "idle"
+    WAKE_DETECTED = "wake_detected"
+    STT_CONNECTING = "stt_connecting"
+    LISTENING = "listening"
+    PROCESSING = "processing"
+    SPEAKING = "speaking"
+    SUSPENDED = "suspended"
+
+
+def _normalize_wake_transcript(transcript: str) -> str:
+    """Strip one leading wake phrase, including Deepgram's `fridaywhat`."""
+    return _WAKE_PREFIX.sub("", transcript, count=1).strip()
 
 
 @dataclass
@@ -101,10 +120,13 @@ class VoiceLoop:
         memory: Optional[Any] = None,
         approve: Optional[Any] = None,
         audio: Optional[AudioResourceManager] = None,
+        capture: Optional[AudioCaptureService] = None,
         play_ack: Callable[..., None] = ack_mod.play_ack,
         audio_output: Optional[Any] = None,
         spans_path: Path = DEFAULT_SPANS_PATH,
         speak_enabled: bool = True,
+        conversation_seconds: float = CONVERSATION_SECONDS,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._detector = detector
         self._stt_factory = stt_factory
@@ -114,15 +136,20 @@ class VoiceLoop:
         self._memory = memory
         self._approve = approve
         self._audio = audio
+        self._capture = capture
         self._play_ack = play_ack
         self._audio_output = audio_output
         self._spans_path = spans_path
         self._speak_enabled = speak_enabled
+        self._conversation_seconds = conversation_seconds
+        self._clock = clock
 
         self._mic_gate = tts.MicGate()
         self._speaker: Optional[tts.TTSSpeaker] = None
         self._turn_task: Optional[asyncio.Task] = None
+        self._stt_subscription: Optional[AudioSubscription] = None
         self.mic_state: "MicState" = MicState.AVAILABLE
+        self.audio_state = AudioTurnState.IDLE
         self.invalidated = 0
         self.turns: list[Turn] = []
         # Serialises the gateway's text-driven entry points. Two `ask` calls
@@ -145,36 +172,71 @@ class VoiceLoop:
             self._detector = wake.WakeWordDetector()
         stop = stop or asyncio.Event()
 
-        manager = self._audio
+        manager = self._audio or (
+            self._capture.manager if self._capture is not None else None
+        )
         if manager is None:
-            manager = AudioResourceManager(
-                on_state=self._on_mic_state,
-                on_preempt=self._invalidate_turn,
-                on_forget=self._forget_audio,
-                on_open=self._arm_detector,
-            )
-            self._audio = manager
+            manager = AudioResourceManager()
+        self._audio = manager
+        manager.set_callbacks(
+            on_state=self._on_mic_state,
+            on_preempt=self._invalidate_turn,
+            on_forget=self._forget_audio,
+            on_open=self._arm_detector,
+        )
+        capture = self._capture
+        if capture is None:
+            capture = AudioCaptureService(manager)
+            self._capture = capture
         await manager.start()
+        capture_task = asyncio.create_task(capture.run(stop))
+        events.emit("audio", "capture-started")
         try:
-            await self._pump(manager.capture(stop), stop)
+            while not stop.is_set() and not capture_task.done():
+                await self._pump(capture.wake_chunks(), stop)
+            if capture_task.done():
+                await capture_task
         finally:
+            metrics = capture.metrics
+            stop.set()
+            capture.reset()
+            if not capture_task.done():
+                capture_task.cancel()
+            await asyncio.gather(capture_task, return_exceptions=True)
+            task = self._turn_task
+            if task is not None and not task.done():
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
             await manager.stop()
+            events.emit("audio", "capture-stopped", frames=metrics.frames_captured,
+                        bytes=metrics.bytes_captured)
             indicator.clear()
 
     # -- audio resource manager callbacks --------------------------------
 
+    def _set_audio_state(self, state: AudioTurnState, *, turn: Optional[str] = None) -> None:
+        if state is self.audio_state:
+            return
+        previous = self.audio_state
+        self.audio_state = state
+        events.emit("audio-state", frm=previous.value, to=state.value, turn=turn)
+
     def _on_mic_state(self, state: "MicState", owners: list) -> None:
         """Mirror the microphone state machine into the visible indicator."""
         self.mic_state = state
-        if state is MicState.SUSPENDED:
+        if state is MicState.PREEMPTING:
+            self._set_audio_state(AudioTurnState.SUSPENDED)
+        elif state is MicState.SUSPENDED:
+            self._set_audio_state(AudioTurnState.SUSPENDED)
             detail = self._audio.describe() if self._audio is not None else ""
             indicator.set_state(indicator.State.SUSPENDED, detail=detail)
             events.emit("mic", "paused", who=detail)
         elif state is MicState.FRIDAY_LISTENING:
+            self._set_audio_state(AudioTurnState.IDLE)
             indicator.set_state(indicator.State.IDLE)
             events.emit("mic", "listening")
 
-    def _invalidate_turn(self, owners: list) -> None:
+    def _invalidate_turn(self, owners: list) -> "Optional[asyncio.Task[None]]":
         """Discard the in-flight turn's incomplete utterance.
 
         A turn interrupted mid-sentence must never be resumed: "tell Codex to
@@ -191,6 +253,24 @@ class VoiceLoop:
         if task is not None and not task.done():
             self.invalidated += 1
             task.cancel()
+        if self._stt_subscription is not None:
+            self._stt_subscription.close()
+            self._stt_subscription = None
+        self._set_audio_state(AudioTurnState.SUSPENDED)
+
+        async def _finish() -> None:
+            if task is not None:
+                await asyncio.gather(task, return_exceptions=True)
+            if self._capture is not None:
+                self._capture.reset()
+            self._arm_detector()
+
+        if task is not None and not task.done():
+            return asyncio.create_task(_finish())
+        if self._capture is not None:
+            self._capture.reset()
+        self._arm_detector()
+        return None
 
     def _arm_detector(self) -> None:
         """Arm the wake detector's warmup for a newly opened capture stream.
@@ -212,6 +292,8 @@ class VoiceLoop:
         freshly opened capture stream drops a frame and that discontinuity
         scores as a wake word about a second later.
         """
+        if self._capture is not None:
+            self._capture.reset()
         if self._detector is not None:
             with contextlib.suppress(Exception):
                 self._detector.begin_stream()
@@ -222,43 +304,85 @@ class VoiceLoop:
         Takes an async iterator rather than owning a device, so it can be
         driven from a test or from the Audio Resource Manager identically.
         """
-        turn_task: Optional[asyncio.Task] = None
         async for chunk in frames:
             if stop.is_set():
                 break
-            detection = self._detector.feed_chunk(chunk)
+            if (self._capture is not None
+                    and self.audio_state not in (AudioTurnState.IDLE,
+                                                 AudioTurnState.SPEAKING)):
+                events.debug("wake", "ignored", state=self.audio_state.value)
+                continue
+            detect = getattr(self._detector, "detect_chunk", self._detector.feed_chunk)
+            detection = detect(chunk)
             if detection is None:
                 continue
             # Wake word during playback is the barge-in: preempt the old
             # turn, then take the new utterance as an ordinary turn.
+            previous_task = self._turn_task
             if self._speaker is not None and self._speaker.is_speaking:
                 self._speaker.stop()
+            if (self.audio_state is AudioTurnState.SPEAKING
+                    and previous_task is not None and not previous_task.done()):
+                previous_task.cancel()
             # The turn runs as a task, NOT awaited here. Awaiting it stops
             # this loop pumping frames, so feed_chunk never forwards audio
             # to the live queue the turn is reading -- the turn then waits
             # for audio that only this loop can deliver and hangs forever.
             # Observed live on the very first real detection.
-            turn_task = asyncio.create_task(self.handle_detection(detection))
+            span = TurnSpan("pending", turn_id=detection.turn_id or None,
+                            path=self._spans_path)
+            span.mark("wake_detected")
+            subscription = (
+                self._capture.subscribe_stt() if self._capture is not None else None
+            )
+            span.mark("stt_subscription_created")
+            self._set_audio_state(AudioTurnState.WAKE_DETECTED, turn=span.turn_id)
+            if subscription is None:
+                # Preserve the injected/legacy entry point used by offline
+                # detector tests and file-fed callers.
+                turn_task = asyncio.create_task(self.handle_detection(detection))
+            else:
+                async def _start_turn() -> Turn:
+                    if previous_task is not None and not previous_task.done():
+                        await asyncio.gather(previous_task, return_exceptions=True)
+                    return await self.handle_detection(
+                        detection, subscription=subscription, span=span)
+
+                turn_task = asyncio.create_task(_start_turn())
             self._turn_task = turn_task
-        if turn_task is not None and not turn_task.done():
-            turn_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError, Exception):
-                await turn_task
 
     # -- one turn ---------------------------------------------------------
 
-    async def handle_detection(self, detection: wake.WakeDetection) -> Turn:
+    async def handle_detection(
+        self,
+        detection: wake.WakeDetection,
+        *,
+        subscription: Optional[AudioSubscription] = None,
+        span: Optional[TurnSpan] = None,
+    ) -> Turn:
         """Run one full turn. Never raises: a failed turn is recorded, not fatal."""
-        span = TurnSpan("pending", turn_id=detection.turn_id or None,
-                        path=self._spans_path)
+        span = span or TurnSpan("pending", turn_id=detection.turn_id or None,
+                                path=self._spans_path)
         span.mark("speech_started")
         turn = Turn(turn_id=span.turn_id)
         indicator.set_state(indicator.State.LISTENING)
+        source = subscription or detection
+        self._stt_subscription = subscription
+        follow_up = False
         try:
-            turn.transcript = await self._transcribe(detection, span)
+            turn.transcript = await self._transcribe(source, span)
             events.emit("stt", events.quote(turn.transcript), turn=span.turn_id)
-            if turn.transcript.strip():
-                await self._respond(turn.transcript, span, turn)
+            normalized = _normalize_wake_transcript(turn.transcript)
+            span.mark("transcript_normalized")
+            events.emit("normalize", original=events.quote(turn.transcript),
+                        normalized=events.quote(normalized), turn=span.turn_id)
+            turn.transcript = normalized
+            self._set_audio_state(AudioTurnState.PROCESSING, turn=span.turn_id)
+            if normalized.strip():
+                await self._respond(normalized, span, turn)
+            else:
+                events.emit("turn", "wake-only", turn=span.turn_id)
+            follow_up = True
         except asyncio.CancelledError:
             # Microphone preemption (or shutdown). The utterance is incomplete
             # and is discarded, never resumed: finishing "...delete the old"
@@ -271,11 +395,17 @@ class VoiceLoop:
             turn.error = repr(exc)
             events.emit("turn", "failed", turn=span.turn_id, error=repr(exc))
         finally:
-            # Re-arm wake detection. Without this the detector keeps forwarding
-            # every frame to a dead queue and FRIDAY never hears again.
-            with contextlib.suppress(Exception):
-                self._detector.end_handoff(detection.live)
-            indicator.set_state(indicator.State.IDLE)
+            if subscription is not None:
+                subscription.close()
+                if self._stt_subscription is subscription:
+                    self._stt_subscription = None
+            else:
+                # Compatibility for file-fed and injected legacy detections.
+                with contextlib.suppress(Exception):
+                    self._detector.end_handoff(detection.live)
+            if self.audio_state is not AudioTurnState.SUSPENDED:
+                self._set_audio_state(AudioTurnState.IDLE, turn=span.turn_id)
+                indicator.set_state(indicator.State.IDLE)
             turn.stages = dict(span.stages)
             if turn.reply:
                 events.emit("reply", events.quote(turn.reply),
@@ -283,30 +413,117 @@ class VoiceLoop:
             span.write()
             self.turns.append(turn)
             self._remember(turn)
+        if (follow_up and self._capture is not None
+                and self._stt_factory is not None
+                and self._conversation_seconds > 0):
+            await self._follow_up_window()
+            self._arm_detector()
+        elif subscription is not None:
+            self._arm_detector()
         return turn
 
-    async def _transcribe(self, detection: wake.WakeDetection, span: TurnSpan) -> str:
+    async def _transcribe(
+        self,
+        source: "wake.WakeDetection | AudioSubscription",
+        span: TurnSpan,
+    ) -> str:
         """Drain one utterance into a final transcript, prewarming on interims."""
         if self._stt_factory is None:
             return ""
         final = ""
         best_interim = ""
-        async with self._stt_factory() as transport:
-            async for event in stt.run_utterance(detection, transport, span=span):
-                if event.is_final:
-                    final = event.text
-                    continue
-                if event.text.strip():
-                    best_interim = event.text
-                    if self._assembler is not None:
-                        # Interims are the only free lead time there is.
-                        self._assembler.prewarm(event.text, span=span)
+        self._set_audio_state(AudioTurnState.STT_CONNECTING, turn=span.turn_id)
+        span.mark("stt_connect_started")
+        events.emit("stt-connection", "connecting", turn=span.turn_id)
+        try:
+            async with self._stt_factory() as transport:
+                span.mark("stt_connected")
+                events.emit("stt-connection", "connected", turn=span.turn_id)
+                self._set_audio_state(AudioTurnState.LISTENING, turn=span.turn_id)
+                async for event in stt.run_utterance(source, transport, span=span):
+                    if event.text.strip() and "speech_started" not in span.stages:
+                        span.mark("speech_started")
+                    if event.is_final:
+                        final = event.text
+                        events.emit("stt-final", events.quote(event.text),
+                                    turn=span.turn_id,
+                                    speech_final=event.speech_final,
+                                    utterance_end=event.utterance_end)
+                        continue
+                    if event.text.strip():
+                        if "stt_first_partial" not in span.stages:
+                            span.mark("stt_first_partial")
+                        events.debug("stt-partial", events.quote(event.text),
+                                     turn=span.turn_id)
+                        best_interim = event.text
+                        if self._assembler is not None:
+                            # Interims are the only free lead time there is.
+                            self._assembler.prewarm(event.text, span=span)
+        finally:
+            events.emit("stt-connection", "closed", turn=span.turn_id)
         # Fall back to the last interim. `run_utterance` closes the turn at
         # MAX_WAIT_MS past VAD speech-end, which can land before Deepgram's
         # final for a short or pause-heavy utterance -- observed live, with a
         # complete interim transcript and no final at all. Requiring is_final
         # would drop the turn silently: heard, understood, ignored.
         return final or best_interim
+
+    async def _follow_up_window(self) -> None:
+        """Listen for wake-free turns until the active conversation expires."""
+        deadline = self._clock() + self._conversation_seconds
+        while self.audio_state is not AudioTurnState.SUSPENDED:
+            remaining = deadline - self._clock()
+            if remaining <= 0:
+                break
+            assert self._capture is not None
+            subscription = self._capture.subscribe_live()
+            self._stt_subscription = subscription
+            span = TurnSpan("pending", path=self._spans_path)
+            span.mark("stt_subscription_created")
+            self._set_audio_state(AudioTurnState.STT_CONNECTING, turn=span.turn_id)
+            try:
+                transcript = await asyncio.wait_for(
+                    self._transcribe(subscription, span), timeout=remaining
+                )
+            except asyncio.TimeoutError:
+                events.emit("conversation", "timeout", turn=span.turn_id)
+                break
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:  # noqa: BLE001
+                events.emit("turn", "failed", turn=span.turn_id, error=repr(exc))
+                break
+            finally:
+                subscription.close()
+                if self._stt_subscription is subscription:
+                    self._stt_subscription = None
+            transcript = _normalize_wake_transcript(transcript)
+            span.mark("transcript_normalized")
+            if not transcript.strip():
+                continue
+            turn = Turn(turn_id=span.turn_id, transcript=transcript)
+            self._set_audio_state(AudioTurnState.PROCESSING, turn=span.turn_id)
+            try:
+                await self._respond(transcript, span, turn)
+            except asyncio.CancelledError:
+                turn.preempted = True
+                turn.error = "preempted: microphone taken by a higher priority app"
+                raise
+            except Exception as exc:  # noqa: BLE001
+                turn.error = repr(exc)
+                events.emit("turn", "failed", turn=span.turn_id, error=repr(exc))
+            finally:
+                turn.stages = dict(span.stages)
+                if turn.reply:
+                    events.emit("reply", events.quote(turn.reply),
+                                tier=turn.tier, spoke=turn.spoke)
+                span.write()
+                self.turns.append(turn)
+                self._remember(turn)
+            deadline = self._clock() + self._conversation_seconds
+        if self.audio_state is not AudioTurnState.SUSPENDED:
+            self._set_audio_state(AudioTurnState.IDLE)
+            indicator.set_state(indicator.State.IDLE)
 
     async def _respond(self, transcript: str, span: TurnSpan, turn: Turn) -> None:
         decision = router.classify_and_mark(transcript, span)
@@ -373,7 +590,13 @@ class VoiceLoop:
 
     async def _play(self, name: str, span: TurnSpan) -> None:
         """Play an ack off the event loop; play_ack blocks on time.sleep."""
-        await asyncio.to_thread(self._play_ack, name, span)
+        previous = self.audio_state
+        self._set_audio_state(AudioTurnState.SPEAKING, turn=span.turn_id)
+        try:
+            await asyncio.to_thread(self._play_ack, name, span)
+        finally:
+            if self.audio_state is AudioTurnState.SPEAKING:
+                self._set_audio_state(previous, turn=span.turn_id)
 
     async def _say_text(self, text: str, span: TurnSpan, turn: Turn) -> None:
         async def _one() -> Any:
@@ -393,6 +616,7 @@ class VoiceLoop:
         if ack_task is not None:
             # Serialise: two streams on one speaker is two voices at once.
             await ack_task
+        self._set_audio_state(AudioTurnState.SPEAKING, turn=span.turn_id)
         async with self._tts_factory() as transport:
             speaker = tts.TTSSpeaker(
                 transport, mic_gate=self._mic_gate, output=self._audio_output
@@ -402,6 +626,12 @@ class VoiceLoop:
                 await speaker.speak(stream, span=span)
             finally:
                 self._speaker = None
+                if self.audio_state is AudioTurnState.SPEAKING:
+                    self._set_audio_state(AudioTurnState.PROCESSING,
+                                          turn=span.turn_id)
+        task = asyncio.current_task()
+        if task is not None and task.cancelling():
+            raise asyncio.CancelledError
         turn.spoke = True
         turn.interrupted = turn.interrupted or speaker.stopped
 

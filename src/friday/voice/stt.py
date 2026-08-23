@@ -1,8 +1,8 @@
 """Deepgram streaming STT: replay wake.py's pre-roll + live audio, surface interim
 and final transcripts, and close the turn on local VAD independent of the network.
 
-Consumes T2's `WakeDetection` handoff (`preroll` bytes, then `live` queue of 80ms
-chunks terminated by None) and streams it to Deepgram's v1 streaming socket with
+Consumes AudioCaptureService subscriptions (with the legacy `WakeDetection`
+handoff retained for file/tests) and streams them to Deepgram's v1 socket with
 interim results on, while a local webrtcvad-based detector marks speech-end from
 raw audio alone. The turn closes on agreement between local VAD and Deepgram's own
 endpointing/UtteranceEnd signal, capped at MAX_WAIT_MS so a flaky connection can
@@ -21,6 +21,7 @@ import wave
 from dataclasses import dataclass
 from typing import Any, AsyncIterator, Optional, Protocol
 
+from friday.audio.capture import AudioSubscription
 from friday.core.spans import TurnSpan, start_turn
 from friday.voice.wake import CHUNK_SAMPLES, PREROLL_SECONDS, SAMPLE_RATE, WakeDetection
 
@@ -185,7 +186,7 @@ class LocalVAD:
 
 
 async def run_utterance(
-    detection: WakeDetection,
+    source: "WakeDetection | AudioSubscription",
     transport: Optional[Transport],
     *,
     span: Optional[TurnSpan] = None,
@@ -211,14 +212,19 @@ async def run_utterance(
     sentinel = object()
 
     async def audio_source() -> AsyncIterator[bytes]:
+        if isinstance(source, AudioSubscription):
+            async for frame in source:
+                if frame.pcm:
+                    yield frame.pcm
+            return
         # Never emit a zero-length chunk: Deepgram reads an empty binary frame
         # as an end-of-stream signal and closes the socket, which looks exactly
         # like a mid-turn network failure. An empty preroll is legitimate (a
         # turn opened without buffered audio), so it must be skipped, not sent.
-        if detection.preroll:
-            yield detection.preroll
+        if source.preroll:
+            yield source.preroll
         while True:
-            chunk = await detection.live.get()
+            chunk = await source.live.get()
             if chunk is None:
                 return
             if chunk:

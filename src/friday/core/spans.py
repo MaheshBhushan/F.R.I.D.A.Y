@@ -20,9 +20,15 @@ from pathlib import Path
 from typing import Optional
 
 STAGES = (
+    "wake_detected",
+    "stt_subscription_created",
     "speech_started",
+    "stt_connect_started",
+    "stt_connected",
+    "stt_first_partial",
     "speech_ended_vad",
     "stt_final",
+    "transcript_normalized",
     "intent_classified",
     "ack_audible",
     "context_ready",

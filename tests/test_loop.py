@@ -12,6 +12,7 @@ import asyncio
 from typing import Any, AsyncIterator, Optional
 
 from friday import brain, loop as loop_mod
+from friday.audio.capture import AudioCaptureService
 from friday.brain import FakeLLMTransport, ScriptedTurn
 from friday.voice import tts, wake
 from friday.voice.stt import TranscriptEvent
@@ -220,6 +221,101 @@ def test_empty_transcript_costs_nothing(tmp_path):
     assert lp._llm.requests == []
     assert played == []
     assert detector.armed is True
+
+
+def test_wake_prefix_is_stripped_only_from_voice_turns(tmp_path):
+    lp, detector, _, _ = _build(
+        tmp_path, transcript_events=[_final("Hey Friday, what's running")]
+    )
+    routed: list[str] = []
+
+    async def _record(transcript, span, turn):
+        routed.append(transcript)
+
+    lp._respond = _record
+
+    async def _run():
+        voice = await lp.handle_detection(detector.start())
+        text = await lp.ask("fridaywhat is running", speak=False)
+        return voice, text
+
+    voice, text = asyncio.run(_run())
+    assert voice.transcript == "what's running"
+    assert text.transcript == "fridaywhat is running"
+    assert routed == ["what's running", "fridaywhat is running"]
+
+
+def test_wake_only_transcript_is_never_routed(tmp_path):
+    lp, detector, _, _ = _build(
+        tmp_path, transcript_events=[_final("Okay Friday!")]
+    )
+
+    async def _unexpected(*args):
+        raise AssertionError("wake-only transcript reached the router")
+
+    lp._respond = _unexpected
+    turn = asyncio.run(lp.handle_detection(detector.start()))
+    assert turn.transcript == ""
+    assert turn.tier is None
+
+
+def test_pump_subscribes_before_scheduling_stt(tmp_path):
+    lp, detector, _, _ = _build(tmp_path, transcript_events=[])
+    order: list[str] = []
+    handled = asyncio.Event()
+
+    class Capture:
+        def subscribe_stt(self):
+            order.append("subscribed")
+            return object()
+
+    class Detector(FakeDetector):
+        def detect_chunk(self, chunk, span=None):
+            return self.start()
+
+    lp._capture = Capture()
+    lp._detector = Detector()
+
+    async def _handle(detection, *, subscription, span):
+        order.append("task-started")
+        assert "stt_subscription_created" in span.stages
+        handled.set()
+        return loop_mod.Turn(turn_id=span.turn_id)
+
+    lp.handle_detection = _handle
+
+    async def _run():
+        async def _frames():
+            yield b"\x00" * 2560
+
+        await lp._pump(_frames(), asyncio.Event())
+        await asyncio.wait_for(handled.wait(), timeout=1)
+
+    asyncio.run(_run())
+    assert order == ["subscribed", "task-started"]
+
+
+def test_follow_up_timeout_closes_audio_and_returns_to_idle(tmp_path):
+    class Source:
+        async def capture(self, stop):
+            if False:
+                yield b""
+
+    capture = AudioCaptureService(Source())
+    transport = FakeSTT([])
+    lp = loop_mod.VoiceLoop(
+        detector=FakeDetector(),
+        stt_factory=lambda: transport,
+        capture=capture,
+        spans_path=tmp_path / "spans.jsonl",
+        conversation_seconds=0.01,
+    )
+
+    asyncio.run(lp._follow_up_window())
+
+    assert transport.closed is True
+    assert capture.metrics.active_subscribers == 0
+    assert lp.audio_state is loop_mod.AudioTurnState.IDLE
 
 
 def test_turn_is_recorded_to_memory(tmp_path):

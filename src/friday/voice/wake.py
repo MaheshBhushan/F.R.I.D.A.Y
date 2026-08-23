@@ -210,6 +210,24 @@ class WakeWordDetector:
             self._active_live.put_nowait(chunk)
             return None
 
+        return self._detect(chunk, span=span, handoff=True)
+
+    def detect_chunk(self, chunk: bytes, span: Optional[TurnSpan] = None) -> Optional[WakeDetection]:
+        """Detect without creating a second audio handoff.
+
+        The assembled loop uses AudioCaptureService for pre-roll and live
+        delivery; legacy file/benchmark callers keep `feed_chunk`'s queue.
+        """
+        return self._detect(chunk, span=span, handoff=False)
+
+    def _detect(
+        self,
+        chunk: bytes,
+        *,
+        span: Optional[TurnSpan],
+        handoff: bool,
+    ) -> Optional[WakeDetection]:
+
         self._ring.append(chunk)
         frame = np.frombuffer(chunk, dtype=np.int16)
         # Feed the model during warmup so its buffer is primed, but ignore the
@@ -234,7 +252,8 @@ class WakeWordDetector:
                 events.emit("wake", model=name, score=float(score),
                             preroll=f"{(len(preroll) // 2) / SAMPLE_RATE:.2f}s")
                 live: "asyncio.Queue[Optional[bytes]]" = asyncio.Queue()
-                self._active_live = live
+                if handoff:
+                    self._active_live = live
                 return WakeDetection(
                     model=name,
                     score=float(score),
@@ -267,29 +286,17 @@ class WakeWordDetector:
 
 async def capture_loop(detector: WakeWordDetector, on_detection, span: Optional[TurnSpan] = None) -> None:
     """Continuously capture mic audio and feed it through `detector`."""
-    import sounddevice as sd
+    from friday.audio import AudioCaptureService, AudioResourceManager
+    from friday.voice import indicator
 
-    from friday.voice import devices, indicator
-
-    loop = asyncio.get_running_loop()
-    queue: asyncio.Queue[bytes] = asyncio.Queue()
-
-    def _callback(indata, frames, time_info, status) -> None:
-        loop.call_soon_threadsafe(queue.put_nowait, bytes(indata))
-
-    devices.apply()
+    stop = asyncio.Event()
+    manager = AudioResourceManager(on_open=detector.begin_stream)
+    capture = AudioCaptureService(manager)
     indicator.set_state(indicator.State.IDLE)
-    detector.begin_stream()
-    with sd.RawInputStream(
-        samplerate=SAMPLE_RATE,
-        blocksize=CHUNK_SAMPLES,
-        dtype="int16",
-        channels=1,
-        callback=_callback,
-        device=devices.input_device(),
-    ):
-        while True:
-            chunk = await queue.get()
+    await manager.start()
+    capture_task = asyncio.create_task(capture.run(stop))
+    try:
+        async for chunk in capture.wake_chunks():
             detection = detector.feed_chunk(chunk, span=span)
             if detection is not None:
                 # Set state here, not in feed_chunk: run_bench() times that
@@ -297,6 +304,12 @@ async def capture_loop(detector: WakeWordDetector, on_detection, span: Optional[
                 # would inflate the measured number.
                 indicator.set_state(indicator.State.LISTENING)
                 on_detection(detection)
+    finally:
+        stop.set()
+        capture.reset()
+        capture_task.cancel()
+        await asyncio.gather(capture_task, return_exceptions=True)
+        await manager.stop()
 
 
 async def probe(seconds: float = 20.0, threshold: float = DEFAULT_THRESHOLD,

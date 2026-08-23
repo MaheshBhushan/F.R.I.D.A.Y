@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import inspect
 import os
 from enum import Enum
 from typing import AsyncIterator, Awaitable, Callable, Optional
@@ -67,8 +68,9 @@ async def _pactl(*args: str) -> str:
 class AudioResourceManager:
     """Arbitrates microphone ownership and drives the state machine.
 
-    Callbacks, all optional and all synchronous so they cannot stall the
-    transition:
+    Callbacks are optional. State/open/forget callbacks are synchronous;
+    preemption may return an awaitable so transport cleanup completes before
+    the physical capture stream is released:
 
     * `on_state` -- every state change, for the UI/indicator.
     * `on_preempt` -- fired in PREEMPTING, before the stream closes. This is
@@ -84,7 +86,7 @@ class AudioResourceManager:
         inspect: Optional[Callable[[], Awaitable[str]]] = None,
         recheck_seconds: float = RECHECK_SECONDS,
         on_state: Optional[Callable[["MicState", list[Owner]], None]] = None,
-        on_preempt: Optional[Callable[[list[Owner]], None]] = None,
+        on_preempt: Optional[Callable[[list[Owner]], Optional[Awaitable[None]]]] = None,
         on_forget: Optional[Callable[[], None]] = None,
         on_open: Optional[Callable[[], None]] = None,
         echo_cancel: Optional[EchoCancelModule] = None,
@@ -117,6 +119,20 @@ class AudioResourceManager:
     @property
     def blockers(self) -> list[Owner]:
         return [o for o in self.owners if o.preempts_friday]
+
+    def set_callbacks(
+        self,
+        *,
+        on_state: Optional[Callable[["MicState", list[Owner]], None]] = None,
+        on_preempt: Optional[Callable[[list[Owner]], Optional[Awaitable[None]]]] = None,
+        on_forget: Optional[Callable[[], None]] = None,
+        on_open: Optional[Callable[[], None]] = None,
+    ) -> None:
+        """Bind the lifecycle owner when a manager is injected."""
+        self._on_state = on_state
+        self._on_preempt = on_preempt
+        self._on_forget = on_forget
+        self._on_open = on_open
 
     def describe(self) -> str:
         """The line to put in front of the user."""
@@ -167,11 +183,14 @@ class AudioResourceManager:
                 while True:
                     read = asyncio.create_task(proc.stdout.readline())
                     tick = asyncio.create_task(asyncio.sleep(self._recheck))
-                    done, _ = await asyncio.wait(
-                        {read, tick}, return_when=asyncio.FIRST_COMPLETED)
-                    for t in (read, tick):
-                        if t not in done:
-                            t.cancel()
+                    try:
+                        done, _ = await asyncio.wait(
+                            {read, tick}, return_when=asyncio.FIRST_COMPLETED)
+                    finally:
+                        for t in (read, tick):
+                            if not t.done():
+                                t.cancel()
+                        await asyncio.gather(read, tick, return_exceptions=True)
                     if read in done:
                         line = await read
                         if not line:
@@ -267,11 +286,14 @@ class AudioResourceManager:
                     lost = asyncio.create_task(self.taken.wait())
                     halt = asyncio.create_task(stop.wait())
                     waiters = {nxt, lost, halt}
-                    done, _ = await asyncio.wait(
-                        waiters, return_when=asyncio.FIRST_COMPLETED)
-                    for t in waiters:
-                        if t not in done:
-                            t.cancel()
+                    try:
+                        done, _ = await asyncio.wait(
+                            waiters, return_when=asyncio.FIRST_COMPLETED)
+                    finally:
+                        for t in waiters:
+                            if not t.done():
+                                t.cancel()
+                        await asyncio.gather(*waiters, return_exceptions=True)
                     if self.taken.is_set():
                         # Immediate: the higher-priority app does not wait for
                         # FRIDAY to finish, and the incomplete turn dies here
@@ -279,8 +301,12 @@ class AudioResourceManager:
                         preempted = True
                         self._enter(MicState.PREEMPTING)
                         if self._on_preempt is not None:
-                            with contextlib.suppress(Exception):
-                                self._on_preempt(self.blockers)
+                            try:
+                                result = self._on_preempt(self.blockers)
+                                if inspect.isawaitable(result):
+                                    await result
+                            except Exception:
+                                pass
                         return
                     if stop.is_set():
                         return
@@ -312,6 +338,7 @@ async def _race(*coros) -> None:
     finally:
         for t in tasks:
             t.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
 
 
 @contextlib.asynccontextmanager
