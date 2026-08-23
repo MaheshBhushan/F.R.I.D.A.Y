@@ -21,6 +21,8 @@ sys.path.insert(0, str(UPSTREAM))
 from microwakeword.audio.audio_utils import generate_features_for_clip, remove_silence_webrtc
 from microwakeword.audio.augmentation import Augmentation
 
+WAKE_ONLY_PHRASES = {"friday", "friday?", "hey friday"}
+
 
 def _rows(manifest: Path) -> list[dict]:
     return [json.loads(line) for line in manifest.read_text().splitlines() if line.strip()]
@@ -36,6 +38,8 @@ def _generator(rows: list[dict], split: str):
     repetitions = 10 if split == "training" else 1
     for row in rows:
         if row["split"] != split:
+            continue
+        if row["phrase"].strip().lower() not in WAKE_ONLY_PHRASES:
             continue
         rate, audio = wavfile.read(DATASETS / row["path"])
         assert rate == 16_000 and audio.dtype == np.int16 and audio.ndim == 1
@@ -64,11 +68,17 @@ def main() -> int:
     counts = Counter(row["split"] for row in rows)
     durations: defaultdict[str, float] = defaultdict(float)
     for row in rows:
-        durations[row["split"]] += row["samples"] / row["sample_rate"]
+        if row["phrase"].strip().lower() in WAKE_ONLY_PHRASES:
+            durations[row["split"]] += row["samples"] / row["sample_rate"]
 
     output = DATASETS / "features" / "user_positives"
     for split in ("training", "validation", "testing"):
-        if not counts[split]:
+        wake_count = sum(
+            row["split"] == split
+            and row["phrase"].strip().lower() in WAKE_ONLY_PHRASES
+            for row in rows
+        )
+        if not wake_count:
             raise ValueError(f"no {split} recordings")
         target = output / split / "friday_mmap"
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -79,7 +89,8 @@ def main() -> int:
             verbose=True,
         )
         print(
-            f"{split}: source_examples={counts[split]} "
+            f"{split}: wake_only_examples={wake_count} "
+            f"context_examples_excluded={counts[split] - wake_count} "
             f"source_duration={durations[split]:.2f}s feature_width=40"
         )
     return 0

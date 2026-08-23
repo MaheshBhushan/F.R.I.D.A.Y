@@ -15,10 +15,6 @@ DEFAULT_PHRASES = (
     "Friday",
     "Friday?",
     "Hey Friday",
-    "Friday, are you working?",
-    "Friday, check Codex.",
-    "Friday, stop.",
-    "Friday, what's happening?",
 )
 
 

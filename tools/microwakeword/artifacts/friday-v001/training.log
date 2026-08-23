@@ -1,0 +1,1390 @@
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1787518815.738922 1263596 port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+I0000 00:00:1787518815.739740 1263596 cudart_stub.cc:31] Could not find cuda drivers on your machine, GPU will not be used.
+I0000 00:00:1787518817.157545 1263596 cpu_feature_guard.cc:227] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: AVX2 AVX512F AVX512_VNNI FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1787518826.105704 1263596 port.cc:153] oneDNN custom operations are on. You may see slightly different numerical results due to floating-point round-off errors from different computation orders. To turn them off, set the environment variable `TF_ENABLE_ONEDNN_OPTS=0`.
+I0000 00:00:1787518826.106439 1263596 cudart_stub.cc:31] Could not find cuda drivers on your machine, GPU will not be used.
+INFO:absl:Loading and analyzing data sets.
+E0000 00:00:1787518857.222640 1263596 cuda_platform.cc:52] failed call to cuInit: INTERNAL: CUDA error: Failed call to cuInit: UNKNOWN ERROR (303)
+WARNING:absl:ring_buffer_size_in_time_dim overwritten by the passed-in value: 4
+WARNING:absl:ring_buffer_size_in_time_dim overwritten by the passed-in value: 10
+WARNING:absl:ring_buffer_size_in_time_dim overwritten by the passed-in value: 14
+WARNING:absl:ring_buffer_size_in_time_dim overwritten by the passed-in value: 22
+WARNING:absl:ring_buffer_size_in_time_dim overwritten by the passed-in value: 16
+Model: "functional"
+┏━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━┓
+┃ Layer (type)        ┃ Output Shape      ┃    Param # ┃ Connected to      ┃
+┡━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━┩
+│ input_layer         │ (128, 204, 40)    │          0 │ -                 │
+│ (InputLayer)        │                   │            │                   │
+├─────────────────────┼───────────────────┼────────────┼───────────────────┤
+│ expand_dims         │ (128, 204, 1, 40) │          0 │ input_layer[0][0] │
+│ (ExpandDims)        │                   │            │                   │
+├─────────────────────┼───────────────────┼────────────┼───────────────────┤
+│ stream (Stream)     │ (128, 67, 1, 32)  │      6,400 │ expand_dims[0][0] │
+├─────────────────────┼───────────────────┼────────────┼───────────────────┤
+│ activation          │ (128, 67, 1, 32)  │          0 │ stream[0][0]      │
+│ (Activation)        │                   │            │                   │
+├─────────────────────┼───────────────────┼────────────┼───────────────────┤
+│ stream_1 (Stream)   │ (128, 67, 1, 32)  │          0 │ activation[0][0]  │
+├─────────────────────┼───────────────────┼────────────┼───────────────────┤
+│ depthwise_conv2d    │ (128, 63, 1, 32)  │        192 │ stream_1[0][0]    │
+│ (DepthwiseConv2D)   │                   │            │                   │
+├─────────────────────┼───────────────────┼────────────┼───────────────────┤
+│ conv2d_1 (Conv2D)   │ (128, 63, 1, 64)  │      2,048 │ depthwise_conv2d… │
+├─────────────────────┼───────────────────┼────────────┼───────────────────┤
+│ batch_normalization │ (128, 63, 1, 64)  │        256 │ conv2d_1[0][0]    │
+│ (BatchNormalizatio… │                   │            │                   │
+├─────────────────────┼───────────────────┼────────────┼───────────────────┤
+│ activation_1        │ (128, 63, 1, 64)  │          0 │ batch_normalizat… │
+│ (Activation)        │                   │            │                   │
+├─────────────────────┼───────────────────┼────────────┼───────────────────┤
+│ stream_2 (Stream)   │ (128, 63, 1, 64)  │          0 │ activation_1[0][… │
+├─────────────────────┼───────────────────┼────────────┼───────────────────┤
+│ channel_split       │ [(128, 63, 1,     │          0 │ stream_2[0][0]    │
+│ (ChannelSplit)      │ 32), (128, 63, 1, │            │                   │
+│                     │ 32)]              │            │                   │
+├─────────────────────┼───────────────────┼────────────┼───────────────────┤
+│ strided_keep        │ (128, 63, 1, 32)  │          0 │ channel_split[0]… │
+│ (StridedKeep)       │                   │            │                   │
+├─────────────────────┼───────────────────┼────────────┼───────────────────┤
+│ strided_keep_1      │ (128, 63, 1, 32)  │          0 │ channel_split[0]… │
+│ (StridedKeep)       │                   │            │                   │
+├─────────────────────┼───────────────────┼────────────┼───────────────────┤
+│ depthwise_conv2d_1  │ (128, 57, 1, 32)  │        256 │ strided_keep[0][… │
+│ (DepthwiseConv2D)   │                   │            │                   │
+├─────────────────────┼───────────────────┼────────────┼───────────────────┤
+│ depthwise_conv2d_2  │ (128, 53, 1, 32)  │        384 │ strided_keep_1[0… │
+│ (DepthwiseConv2D)   │                   │            │                   │
+├─────────────────────┼───────────────────┼────────────┼───────────────────┤
+│ strided_drop        │ (128, 53, 1, 32)  │          0 │ depthwise_conv2d… │
+│ (StridedDrop)       │                   │            │                   │
+├─────────────────────┼───────────────────┼────────────┼───────────────────┤
+│ strided_drop_1      │ (128, 53, 1, 32)  │          0 │ depthwise_conv2d… │
+│ (StridedDrop)       │                   │            │                   │
+├─────────────────────┼───────────────────┼────────────┼───────────────────┤
+│ concatenate         │ (128, 53, 1, 64)  │          0 │ strided_drop[0][… │
+│ (Concatenate)       │                   │            │ strided_drop_1[0… │
+├─────────────────────┼───────────────────┼────────────┼───────────────────┤
+│ conv2d_2 (Conv2D)   │ (128, 53, 1, 64)  │      4,096 │ concatenate[0][0] │
+├─────────────────────┼───────────────────┼────────────┼───────────────────┤
+│ batch_normalizatio… │ (128, 53, 1, 64)  │        256 │ conv2d_2[0][0]    │
+│ (BatchNormalizatio… │                   │            │                   │
+├─────────────────────┼───────────────────┼────────────┼───────────────────┤
+│ activation_2        │ (128, 53, 1, 64)  │          0 │ batch_normalizat… │
+│ (Activation)        │                   │            │                   │
+├─────────────────────┼───────────────────┼────────────┼───────────────────┤
+│ stream_3 (Stream)   │ (128, 53, 1, 64)  │          0 │ activation_2[0][… │
+├─────────────────────┼───────────────────┼────────────┼───────────────────┤
+│ channel_split_1     │ [(128, 53, 1,     │          0 │ stream_3[0][0]    │
+│ (ChannelSplit)      │ 32), (128, 53, 1, │            │                   │
+│                     │ 32)]              │            │                   │
+├─────────────────────┼───────────────────┼────────────┼───────────────────┤
+│ strided_keep_2      │ (128, 53, 1, 32)  │          0 │ channel_split_1[… │
+│ (StridedKeep)       │                   │            │                   │
+├─────────────────────┼───────────────────┼────────────┼───────────────────┤
+│ strided_keep_3      │ (128, 53, 1, 32)  │          0 │ channel_split_1[… │
+│ (StridedKeep)       │                   │            │                   │
+├─────────────────────┼───────────────────┼────────────┼───────────────────┤
+│ depthwise_conv2d_3  │ (128, 45, 1, 32)  │        320 │ strided_keep_2[0… │
+│ (DepthwiseConv2D)   │                   │            │                   │
+├─────────────────────┼───────────────────┼────────────┼───────────────────┤
+│ depthwise_conv2d_4  │ (128, 39, 1, 32)  │        512 │ strided_keep_3[0… │
+│ (DepthwiseConv2D)   │                   │            │                   │
+├─────────────────────┼───────────────────┼────────────┼───────────────────┤
+│ strided_drop_2      │ (128, 39, 1, 32)  │          0 │ depthwise_conv2d… │
+│ (StridedDrop)       │                   │            │                   │
+├─────────────────────┼───────────────────┼────────────┼───────────────────┤
+│ strided_drop_3      │ (128, 39, 1, 32)  │          0 │ depthwise_conv2d… │
+│ (StridedDrop)       │                   │            │                   │
+├─────────────────────┼───────────────────┼────────────┼───────────────────┤
+│ concatenate_1       │ (128, 39, 1, 64)  │          0 │ strided_drop_2[0… │
+│ (Concatenate)       │                   │            │ strided_drop_3[0… │
+├─────────────────────┼───────────────────┼────────────┼───────────────────┤
+│ conv2d_3 (Conv2D)   │ (128, 39, 1, 64)  │      4,096 │ concatenate_1[0]… │
+├─────────────────────┼───────────────────┼────────────┼───────────────────┤
+│ batch_normalizatio… │ (128, 39, 1, 64)  │        256 │ conv2d_3[0][0]    │
+│ (BatchNormalizatio… │                   │            │                   │
+├─────────────────────┼───────────────────┼────────────┼───────────────────┤
+│ activation_3        │ (128, 39, 1, 64)  │          0 │ batch_normalizat… │
+│ (Activation)        │                   │            │                   │
+├─────────────────────┼───────────────────┼────────────┼───────────────────┤
+│ stream_4 (Stream)   │ (128, 39, 1, 64)  │          0 │ activation_3[0][… │
+├─────────────────────┼───────────────────┼────────────┼───────────────────┤
+│ depthwise_conv2d_5  │ (128, 17, 1, 64)  │      1,536 │ stream_4[0][0]    │
+│ (DepthwiseConv2D)   │                   │            │                   │
+├─────────────────────┼───────────────────┼────────────┼───────────────────┤
+│ conv2d_4 (Conv2D)   │ (128, 17, 1, 64)  │      4,096 │ depthwise_conv2d… │
+├─────────────────────┼───────────────────┼────────────┼───────────────────┤
+│ batch_normalizatio… │ (128, 17, 1, 64)  │        256 │ conv2d_4[0][0]    │
+│ (BatchNormalizatio… │                   │            │                   │
+├─────────────────────┼───────────────────┼────────────┼───────────────────┤
+│ activation_4        │ (128, 17, 1, 64)  │          0 │ batch_normalizat… │
+│ (Activation)        │                   │            │                   │
+├─────────────────────┼───────────────────┼────────────┼───────────────────┤
+│ stream_5 (Stream)   │ (128, 17, 1, 64)  │          0 │ activation_4[0][… │
+├─────────────────────┼───────────────────┼────────────┼───────────────────┤
+│ flatten (Flatten)   │ (128, 1088)       │          0 │ stream_5[0][0]    │
+├─────────────────────┼───────────────────┼────────────┼───────────────────┤
+│ dense (Dense)       │ (128, 1)          │      1,089 │ flatten[0][0]     │
+└─────────────────────┴───────────────────┴────────────┴───────────────────┘
+ Total params: 26,049 (101.75 KB)
+ Trainable params: 25,537 (99.75 KB)
+ Non-trainable params: 512 (2.00 KB)
+INFO:absl:None
+Validation Batch #1: Accuracy = 0.609; Recall = 0.344; Precision = 0.275; Loss = 0.6912; Mini-Batch #1
+Validation Batch #1: Accuracy = 0.625; Recall = 0.250; Precision = 0.300; Loss = 0.6718; Mini-Batch #2
+Validation Batch #1: Accuracy = 0.656; Recall = 0.202; Precision = 0.300; Loss = 0.6421; Mini-Batch #3
+Validation Batch #1: Accuracy = 0.684; Recall = 0.200; Precision = 0.333; Loss = 0.6256; Mini-Batch #4
+Validation Batch #1: Accuracy = 0.703; Recall = 0.189; Precision = 0.352; Loss = 0.5926; Mini-Batch #5
+Validation Batch #1: Accuracy = 0.714; Recall = 0.192; Precision = 0.388; Loss = 0.5803; Mini-Batch #6
+Validation Batch #1: Accuracy = 0.731; Recall = 0.197; Precision = 0.415; Loss = 0.5525; Mini-Batch #7
+Validation Batch #1: Accuracy = 0.741; Recall = 0.214; Precision = 0.466; Loss = 0.5387; Mini-Batch #8
+Validation Batch #1: Accuracy = 0.757; Recall = 0.253; Precision = 0.529; Loss = 0.5145; Mini-Batch #9
+Validation Batch #1: Accuracy = 0.768; Recall = 0.280; Precision = 0.577; Loss = 0.4960; Mini-Batch #10
+Validation Batch #1: Accuracy = 0.773; Recall = 0.304; Precision = 0.600; Loss = 0.4859; Mini-Batch #11
+Validation Batch #1: Accuracy = 0.777; Recall = 0.325; Precision = 0.620; Loss = 0.4764; Mini-Batch #12
+Validation Batch #1: Accuracy = 0.780; Recall = 0.337; Precision = 0.620; Loss = 0.4641; Mini-Batch #13
+Validation Batch #1: Accuracy = 0.783; Recall = 0.350; Precision = 0.621; Loss = 0.4553; Mini-Batch #14
+Validation Batch #1: Accuracy = 0.789; Recall = 0.371; Precision = 0.633; Loss = 0.4460; Mini-Batch #15
+Validation Batch #1: Accuracy = 0.795; Recall = 0.394; Precision = 0.641; Loss = 0.4352; Mini-Batch #16
+Validation Batch #1: Accuracy = 0.800; Recall = 0.415; Precision = 0.653; Loss = 0.4231; Mini-Batch #17
+Validation Batch #1: Accuracy = 0.804; Recall = 0.436; Precision = 0.671; Loss = 0.4150; Mini-Batch #18
+Validation Batch #1: Accuracy = 0.807; Recall = 0.445; Precision = 0.677; Loss = 0.4079; Mini-Batch #19
+Validation Batch #1: Accuracy = 0.813; Recall = 0.464; Precision = 0.690; Loss = 0.3980; Mini-Batch #20
+Validation Batch #1: Accuracy = 0.820; Recall = 0.482; Precision = 0.700; Loss = 0.3871; Mini-Batch #21
+Validation Batch #1: Accuracy = 0.822; Recall = 0.491; Precision = 0.701; Loss = 0.3810; Mini-Batch #22
+Validation Batch #1: Accuracy = 0.825; Recall = 0.502; Precision = 0.707; Loss = 0.3745; Mini-Batch #23
+Validation Batch #1: Accuracy = 0.830; Recall = 0.515; Precision = 0.711; Loss = 0.3658; Mini-Batch #24
+Validation Batch #1: Accuracy = 0.831; Recall = 0.521; Precision = 0.704; Loss = 0.3629; Mini-Batch #25
+Validation Batch #1: Accuracy = 0.836; Recall = 0.535; Precision = 0.715; Loss = 0.3546; Mini-Batch #26
+Validation Batch #1: Accuracy = 0.840; Recall = 0.547; Precision = 0.725; Loss = 0.3499; Mini-Batch #27
+Validation Batch #1: Accuracy = 0.844; Recall = 0.558; Precision = 0.735; Loss = 0.3439; Mini-Batch #28
+Validation Batch #1: Accuracy = 0.846; Recall = 0.565; Precision = 0.744; Loss = 0.3403; Mini-Batch #29
+Validation Batch #1: Accuracy = 0.848; Recall = 0.572; Precision = 0.751; Loss = 0.3361; Mini-Batch #30
+Validation Batch #1: Accuracy = 0.851; Recall = 0.582; Precision = 0.759; Loss = 0.3307; Mini-Batch #31
+Validation Batch #1: Accuracy = 0.852; Recall = 0.586; Precision = 0.761; Loss = 0.3273; Mini-Batch #32
+Validation Batch #1: Accuracy = 0.856; Recall = 0.598; Precision = 0.767; Loss = 0.3201; Mini-Batch #33
+Validation Batch #1: Accuracy = 0.858; Recall = 0.602; Precision = 0.769; Loss = 0.3166; Mini-Batch #34
+Validation Batch #1: Accuracy = 0.860; Recall = 0.611; Precision = 0.772; Loss = 0.3110; Mini-Batch #35
+Validation Batch #1: Accuracy = 0.863; Recall = 0.619; Precision = 0.776; Loss = 0.3059; Mini-Batch #36
+Validation Batch #1: Accuracy = 0.864; Recall = 0.624; Precision = 0.781; Loss = 0.3036; Mini-Batch #37
+Validation Batch #1: Accuracy = 0.866; Recall = 0.632; Precision = 0.782; Loss = 0.2993; Mini-Batch #38
+Validation Batch #1: Accuracy = 0.868; Recall = 0.640; Precision = 0.790; Loss = 0.2952; Mini-Batch #39
+Validation Batch #1: Accuracy = 0.871; Recall = 0.649; Precision = 0.793; Loss = 0.2904; Mini-Batch #40
+Validation Batch #1: Accuracy = 0.873; Recall = 0.657; Precision = 0.794; Loss = 0.2864; Mini-Batch #41
+Validation Batch #1: Accuracy = 0.874; Recall = 0.663; Precision = 0.796; Loss = 0.2826; Mini-Batch #42
+Validation Batch #1: Accuracy = 0.876; Recall = 0.668; Precision = 0.799; Loss = 0.2785; Mini-Batch #43
+Validation Batch #1: Accuracy = 0.878; Recall = 0.675; Precision = 0.802; Loss = 0.2745; Mini-Batch #44
+Validation Batch #1: Accuracy = 0.880; Recall = 0.681; Precision = 0.805; Loss = 0.2705; Mini-Batch #45
+Validation Batch #1: Accuracy = 0.881; Recall = 0.685; Precision = 0.805; Loss = 0.2675; Mini-Batch #46
+Validation Batch #1: Accuracy = 0.882; Recall = 0.689; Precision = 0.809; Loss = 0.2652; Mini-Batch #47
+Validation Batch #1: Accuracy = 0.884; Recall = 0.693; Precision = 0.810; Loss = 0.2619; Mini-Batch #48
+Validation Batch #1: Accuracy = 0.886; Recall = 0.698; Precision = 0.811; Loss = 0.2583; Mini-Batch #49
+Validation Batch #1: Accuracy = 0.887; Recall = 0.703; Precision = 0.816; Loss = 0.2547; Mini-Batch #50
+Validation Batch #1: Accuracy = 0.888; Recall = 0.704; Precision = 0.819; Loss = 0.2529; Mini-Batch #51
+Validation Batch #1: Accuracy = 0.889; Recall = 0.707; Precision = 0.821; Loss = 0.2515; Mini-Batch #52
+Validation Batch #1: Accuracy = 0.890; Recall = 0.712; Precision = 0.824; Loss = 0.2484; Mini-Batch #53
+Validation Batch #1: Accuracy = 0.892; Recall = 0.714; Precision = 0.826; Loss = 0.2459; Mini-Batch #54
+Validation Batch #1: Accuracy = 0.893; Recall = 0.718; Precision = 0.829; Loss = 0.2440; Mini-Batch #55
+Validation Batch #1: Accuracy = 0.895; Recall = 0.722; Precision = 0.832; Loss = 0.2412; Mini-Batch #56
+Validation Batch #1: Accuracy = 0.896; Recall = 0.726; Precision = 0.835; Loss = 0.2378; Mini-Batch #57
+Validation Batch #1: Accuracy = 0.898; Recall = 0.730; Precision = 0.837; Loss = 0.2358; Mini-Batch #58
+Validation Batch #1: Accuracy = 0.899; Recall = 0.733; Precision = 0.839; Loss = 0.2329; Mini-Batch #59
+Validation Batch #1: Accuracy = 0.900; Recall = 0.735; Precision = 0.841; Loss = 0.2303; Mini-Batch #60
+Validation Batch #1: Accuracy = 0.901; Recall = 0.738; Precision = 0.843; Loss = 0.2278; Mini-Batch #61
+Validation Batch #1: Accuracy = 0.902; Recall = 0.742; Precision = 0.843; Loss = 0.2257; Mini-Batch #62
+Validation Batch #1: Accuracy = 0.904; Recall = 0.745; Precision = 0.846; Loss = 0.2230; Mini-Batch #63
+Validation Batch #1: Accuracy = 0.905; Recall = 0.747; Precision = 0.847; Loss = 0.2212; Mini-Batch #64
+Validation Batch #1: Accuracy = 0.906; Recall = 0.750; Precision = 0.850; Loss = 0.2184; Mini-Batch #65
+Validation Batch #1: Accuracy = 0.907; Recall = 0.753; Precision = 0.852; Loss = 0.2158; Mini-Batch #66
+Validation Batch #1: Accuracy = 0.908; Recall = 0.756; Precision = 0.853; Loss = 0.2136; Mini-Batch #67
+Validation Batch #1: Accuracy = 0.909; Recall = 0.758; Precision = 0.854; Loss = 0.2117; Mini-Batch #68
+Validation Batch #1: Accuracy = 0.910; Recall = 0.761; Precision = 0.856; Loss = 0.2099; Mini-Batch #69
+Validation Batch #1: Accuracy = 0.911; Recall = 0.764; Precision = 0.858; Loss = 0.2079; Mini-Batch #70
+Validation Batch #1: Accuracy = 0.912; Recall = 0.767; Precision = 0.858; Loss = 0.2056; Mini-Batch #71
+Validation Batch #1: Accuracy = 0.914; Recall = 0.770; Precision = 0.861; Loss = 0.2034; Mini-Batch #72
+Validation Batch #1: Accuracy = 0.914; Recall = 0.773; Precision = 0.863; Loss = 0.2016; Mini-Batch #73
+Validation Batch #1: Accuracy = 0.915; Recall = 0.775; Precision = 0.864; Loss = 0.2001; Mini-Batch #74
+Validation Batch #1: Accuracy = 0.916; Recall = 0.778; Precision = 0.866; Loss = 0.1985; Mini-Batch #75
+Validation Batch #1: Accuracy = 0.917; Recall = 0.780; Precision = 0.868; Loss = 0.1969; Mini-Batch #76
+Validation Batch #1: Accuracy = 0.918; Recall = 0.781; Precision = 0.870; Loss = 0.1950; Mini-Batch #77
+Validation Batch #1: Accuracy = 0.918; Recall = 0.782; Precision = 0.871; Loss = 0.1936; Mini-Batch #78
+Validation Batch #1: Accuracy = 0.920; Recall = 0.785; Precision = 0.873; Loss = 0.1916; Mini-Batch #79
+Validation Batch #1: Accuracy = 0.920; Recall = 0.787; Precision = 0.875; Loss = 0.1897; Mini-Batch #80
+Validation Batch #1: Accuracy = 0.921; Recall = 0.790; Precision = 0.877; Loss = 0.1878; Mini-Batch #81
+Validation Batch #1: Accuracy = 0.922; Recall = 0.792; Precision = 0.878; Loss = 0.1861; Mini-Batch #82
+Validation Batch #1: Accuracy = 0.923; Recall = 0.795; Precision = 0.880; Loss = 0.1842; Mini-Batch #83
+Validation Batch #1: Accuracy = 0.924; Recall = 0.797; Precision = 0.881; Loss = 0.1834; Mini-Batch #84
+Validation Batch #1: Accuracy = 0.924; Recall = 0.799; Precision = 0.882; Loss = 0.1817; Mini-Batch #85
+Validation Batch #1: Accuracy = 0.925; Recall = 0.801; Precision = 0.883; Loss = 0.1800; Mini-Batch #86
+Validation Batch #1: Accuracy = 0.926; Recall = 0.802; Precision = 0.883; Loss = 0.1790; Mini-Batch #87
+Validation Batch #1: Accuracy = 0.926; Recall = 0.804; Precision = 0.885; Loss = 0.1777; Mini-Batch #88
+Validation Batch #1: Accuracy = 0.927; Recall = 0.806; Precision = 0.886; Loss = 0.1764; Mini-Batch #89
+Validation Batch #1: Accuracy = 0.927; Recall = 0.807; Precision = 0.887; Loss = 0.1752; Mini-Batch #90
+Validation Batch #1: Accuracy = 0.928; Recall = 0.809; Precision = 0.888; Loss = 0.1739; Mini-Batch #91
+Validation Batch #1: Accuracy = 0.929; Recall = 0.811; Precision = 0.889; Loss = 0.1724; Mini-Batch #92
+Validation Batch #1: Accuracy = 0.929; Recall = 0.812; Precision = 0.890; Loss = 0.1717; Mini-Batch #93
+Validation Batch #1: Accuracy = 0.930; Recall = 0.813; Precision = 0.891; Loss = 0.1704; Mini-Batch #94
+Validation Batch #1: Accuracy = 0.930; Recall = 0.815; Precision = 0.892; Loss = 0.1692; Mini-Batch #95
+Validation Batch #1: Accuracy = 0.931; Recall = 0.816; Precision = 0.893; Loss = 0.1678; Mini-Batch #96
+Validation Batch #1: Accuracy = 0.931; Recall = 0.817; Precision = 0.894; Loss = 0.1667; Mini-Batch #97
+Validation Batch #1: Accuracy = 0.932; Recall = 0.819; Precision = 0.895; Loss = 0.1654; Mini-Batch #98
+Validation Batch #1: Accuracy = 0.933; Recall = 0.821; Precision = 0.896; Loss = 0.1639; Mini-Batch #99
+Validation Batch #1: Accuracy = 0.933; Recall = 0.822; Precision = 0.897; Loss = 0.1625; Mini-Batch #100
+Validation Batch #1: Accuracy = 0.934; Recall = 0.823; Precision = 0.898; Loss = 0.1613; Mini-Batch #101
+Validation Batch #1: Accuracy = 0.934; Recall = 0.825; Precision = 0.899; Loss = 0.1602; Mini-Batch #102
+Validation Batch #1: Accuracy = 0.935; Recall = 0.826; Precision = 0.899; Loss = 0.1589; Mini-Batch #103
+Validation Batch #1: Accuracy = 0.936; Recall = 0.828; Precision = 0.900; Loss = 0.1579; Mini-Batch #104
+Validation Batch #1: Accuracy = 0.936; Recall = 0.829; Precision = 0.900; Loss = 0.1569; Mini-Batch #105
+Validation Batch #1: Accuracy = 0.936; Recall = 0.830; Precision = 0.901; Loss = 0.1559; Mini-Batch #106
+Validation Batch #1: Accuracy = 0.937; Recall = 0.831; Precision = 0.902; Loss = 0.1554; Mini-Batch #107
+Validation Batch #1: Accuracy = 0.937; Recall = 0.833; Precision = 0.903; Loss = 0.1540; Mini-Batch #108
+Validation Batch #1: Accuracy = 0.938; Recall = 0.835; Precision = 0.904; Loss = 0.1529; Mini-Batch #109
+Validation Batch #1: Accuracy = 0.938; Recall = 0.835; Precision = 0.905; Loss = 0.1518; Mini-Batch #110
+Validation Batch #1: Accuracy = 0.939; Recall = 0.837; Precision = 0.906; Loss = 0.1507; Mini-Batch #111
+Validation Batch #1: Accuracy = 0.939; Recall = 0.838; Precision = 0.906; Loss = 0.1495; Mini-Batch #112
+Validation Batch #1: Accuracy = 0.940; Recall = 0.839; Precision = 0.907; Loss = 0.1486; Mini-Batch #113
+Validation Batch #1: Accuracy = 0.940; Recall = 0.841; Precision = 0.908; Loss = 0.1479; Mini-Batch #114
+Validation Batch #1: Accuracy = 0.940; Recall = 0.841; Precision = 0.907; Loss = 0.1470; Mini-Batch #115
+Validation Batch #1: Accuracy = 0.941; Recall = 0.843; Precision = 0.908; Loss = 0.1460; Mini-Batch #116
+Validation Batch #1: Accuracy = 0.941; Recall = 0.843; Precision = 0.908; Loss = 0.1452; Mini-Batch #117
+Validation Batch #1: Accuracy = 0.942; Recall = 0.844; Precision = 0.909; Loss = 0.1443; Mini-Batch #118
+Validation Batch #1: Accuracy = 0.942; Recall = 0.845; Precision = 0.909; Loss = 0.1433; Mini-Batch #119
+Validation Batch #1: Accuracy = 0.943; Recall = 0.846; Precision = 0.910; Loss = 0.1423; Mini-Batch #120
+Validation Batch #1: Accuracy = 0.943; Recall = 0.847; Precision = 0.910; Loss = 0.1413; Mini-Batch #121
+Validation Batch #1: Accuracy = 0.943; Recall = 0.848; Precision = 0.911; Loss = 0.1403; Mini-Batch #122
+Validation Batch #1: Accuracy = 0.944; Recall = 0.849; Precision = 0.912; Loss = 0.1396; Mini-Batch #123
+Validation Batch #1: Accuracy = 0.944; Recall = 0.849; Precision = 0.912; Loss = 0.1386; Mini-Batch #124
+Validation Batch #1: Accuracy = 0.945; Recall = 0.851; Precision = 0.913; Loss = 0.1378; Mini-Batch #125
+Validation Batch #1: Accuracy = 0.945; Recall = 0.852; Precision = 0.914; Loss = 0.1370; Mini-Batch #126
+Validation Batch #1: Accuracy = 0.945; Recall = 0.853; Precision = 0.915; Loss = 0.1361; Mini-Batch #127
+Validation Batch #1: Accuracy = 0.946; Recall = 0.854; Precision = 0.915; Loss = 0.1354; Mini-Batch #128
+Validation Batch #1: Accuracy = 0.946; Recall = 0.854; Precision = 0.916; Loss = 0.1346; Mini-Batch #129
+Validation Batch #1: Accuracy = 0.946; Recall = 0.855; Precision = 0.916; Loss = 0.1340; Mini-Batch #130
+Validation Batch #1: Accuracy = 0.947; Recall = 0.856; Precision = 0.917; Loss = 0.1332; Mini-Batch #131
+Validation Batch #1: Accuracy = 0.947; Recall = 0.857; Precision = 0.917; Loss = 0.1323; Mini-Batch #132
+Validation Batch #1: Accuracy = 0.947; Recall = 0.858; Precision = 0.917; Loss = 0.1316; Mini-Batch #133
+Validation Batch #1: Accuracy = 0.948; Recall = 0.859; Precision = 0.918; Loss = 0.1308; Mini-Batch #134
+Validation Batch #1: Accuracy = 0.948; Recall = 0.859; Precision = 0.918; Loss = 0.1302; Mini-Batch #135
+Validation Batch #1: Accuracy = 0.948; Recall = 0.860; Precision = 0.918; Loss = 0.1295; Mini-Batch #136
+Validation Batch #1: Accuracy = 0.948; Recall = 0.861; Precision = 0.919; Loss = 0.1287; Mini-Batch #137
+Validation Batch #1: Accuracy = 0.949; Recall = 0.862; Precision = 0.919; Loss = 0.1278; Mini-Batch #138
+Validation Batch #1: Accuracy = 0.949; Recall = 0.863; Precision = 0.920; Loss = 0.1271; Mini-Batch #139
+Validation Batch #1: Accuracy = 0.949; Recall = 0.864; Precision = 0.920; Loss = 0.1265; Mini-Batch #140
+Validation Batch #1: Accuracy = 0.949; Recall = 0.865; Precision = 0.921; Loss = 0.1260; Mini-Batch #141
+Validation Batch #1: Accuracy = 0.950; Recall = 0.865; Precision = 0.921; Loss = 0.1253; Mini-Batch #142
+Validation Batch #1: Accuracy = 0.950; Recall = 0.866; Precision = 0.922; Loss = 0.1247; Mini-Batch #143
+Validation Batch #1: Accuracy = 0.950; Recall = 0.867; Precision = 0.923; Loss = 0.1242; Mini-Batch #144
+Validation Batch #1: Accuracy = 0.951; Recall = 0.868; Precision = 0.923; Loss = 0.1236; Mini-Batch #145
+Validation Batch #1: Accuracy = 0.951; Recall = 0.868; Precision = 0.923; Loss = 0.1229; Mini-Batch #146
+Validation Batch #1: Accuracy = 0.951; Recall = 0.869; Precision = 0.924; Loss = 0.1221; Mini-Batch #147
+Validation Batch #1: Accuracy = 0.951; Recall = 0.870; Precision = 0.924; Loss = 0.1215; Mini-Batch #148
+Validation Batch #1: Accuracy = 0.952; Recall = 0.871; Precision = 0.924; Loss = 0.1208; Mini-Batch #149
+Validation Batch #1: Accuracy = 0.952; Recall = 0.872; Precision = 0.925; Loss = 0.1201; Mini-Batch #150
+Validation Batch #1: Accuracy = 0.952; Recall = 0.873; Precision = 0.925; Loss = 0.1194; Mini-Batch #151
+Validation Batch #1: Accuracy = 0.953; Recall = 0.873; Precision = 0.926; Loss = 0.1190; Mini-Batch #152
+Validation Batch #1: Accuracy = 0.953; Recall = 0.874; Precision = 0.926; Loss = 0.1186; Mini-Batch #153
+Validation Batch #1: Accuracy = 0.953; Recall = 0.875; Precision = 0.927; Loss = 0.1179; Mini-Batch #154
+Validation Batch #1: Accuracy = 0.953; Recall = 0.876; Precision = 0.927; Loss = 0.1173; Mini-Batch #155
+Validation Batch #1: Accuracy = 0.953; Recall = 0.876; Precision = 0.928; Loss = 0.1171; Mini-Batch #156
+Validation Batch #1: Accuracy = 0.954; Recall = 0.877; Precision = 0.928; Loss = 0.1166; Mini-Batch #157
+Validation Batch #1: Accuracy = 0.954; Recall = 0.877; Precision = 0.929; Loss = 0.1159; Mini-Batch #158
+Validation Batch #1: Accuracy = 0.954; Recall = 0.878; Precision = 0.929; Loss = 0.1152; Mini-Batch #159
+Validation Batch #1: Accuracy = 0.954; Recall = 0.879; Precision = 0.929; Loss = 0.1147; Mini-Batch #160
+Validation Batch #1: Accuracy = 0.955; Recall = 0.879; Precision = 0.930; Loss = 0.1140; Mini-Batch #161
+Validation Batch #1: Accuracy = 0.955; Recall = 0.880; Precision = 0.930; Loss = 0.1135; Mini-Batch #162
+Validation Batch #1: Accuracy = 0.955; Recall = 0.880; Precision = 0.930; Loss = 0.1131; Mini-Batch #163
+Validation Batch #1: Accuracy = 0.955; Recall = 0.881; Precision = 0.931; Loss = 0.1125; Mini-Batch #164
+Validation Batch #1: Accuracy = 0.956; Recall = 0.882; Precision = 0.931; Loss = 0.1120; Mini-Batch #165
+Validation Batch #1: Accuracy = 0.956; Recall = 0.882; Precision = 0.932; Loss = 0.1114; Mini-Batch #166
+Validation Batch #1: Accuracy = 0.956; Recall = 0.883; Precision = 0.932; Loss = 0.1109; Mini-Batch #167
+Validation Batch #1: Accuracy = 0.956; Recall = 0.884; Precision = 0.932; Loss = 0.1103; Mini-Batch #168
+Validation Batch #1: Accuracy = 0.956; Recall = 0.884; Precision = 0.933; Loss = 0.1098; Mini-Batch #169
+Validation Batch #1: Accuracy = 0.957; Recall = 0.885; Precision = 0.933; Loss = 0.1095; Mini-Batch #170
+Validation Batch #1: Accuracy = 0.957; Recall = 0.886; Precision = 0.933; Loss = 0.1089; Mini-Batch #171
+Validation Batch #1: Accuracy = 0.957; Recall = 0.886; Precision = 0.933; Loss = 0.1084; Mini-Batch #172
+Validation Batch #1: Accuracy = 0.957; Recall = 0.887; Precision = 0.934; Loss = 0.1078; Mini-Batch #173
+Validation Batch #1: Accuracy = 0.958; Recall = 0.887; Precision = 0.934; Loss = 0.1074; Mini-Batch #174
+Validation Batch #1: Accuracy = 0.958; Recall = 0.888; Precision = 0.935; Loss = 0.1068; Mini-Batch #175
+Validation Batch #1: Accuracy = 0.958; Recall = 0.888; Precision = 0.935; Loss = 0.1066; Mini-Batch #176
+Validation Batch #1: Accuracy = 0.958; Recall = 0.889; Precision = 0.935; Loss = 0.1060; Mini-Batch #177
+Validation Batch #1: Accuracy = 0.958; Recall = 0.889; Precision = 0.935; Loss = 0.1058; Mini-Batch #178
+Validation Batch #1: Accuracy = 0.958; Recall = 0.889; Precision = 0.936; Loss = 0.1052; Mini-Batch #179
+Validation Batch #1: Accuracy = 0.959; Recall = 0.890; Precision = 0.936; Loss = 0.1047; Mini-Batch #180
+Validation Batch #1: Accuracy = 0.959; Recall = 0.891; Precision = 0.937; Loss = 0.1043; Mini-Batch #181
+Validation Batch #1: Accuracy = 0.959; Recall = 0.891; Precision = 0.937; Loss = 0.1037; Mini-Batch #182
+Validation Batch #1: Accuracy = 0.959; Recall = 0.892; Precision = 0.937; Loss = 0.1034; Mini-Batch #183
+Validation Batch #1: Accuracy = 0.959; Recall = 0.892; Precision = 0.938; Loss = 0.1029; Mini-Batch #184
+Validation Batch #1: Accuracy = 0.960; Recall = 0.892; Precision = 0.938; Loss = 0.1025; Mini-Batch #185
+Validation Batch #1: Accuracy = 0.960; Recall = 0.893; Precision = 0.938; Loss = 0.1020; Mini-Batch #186
+Validation Batch #1: Accuracy = 0.960; Recall = 0.894; Precision = 0.938; Loss = 0.1015; Mini-Batch #187
+Validation Batch #1: Accuracy = 0.960; Recall = 0.894; Precision = 0.939; Loss = 0.1011; Mini-Batch #188
+Validation Batch #1: Accuracy = 0.960; Recall = 0.895; Precision = 0.938; Loss = 0.1009; Mini-Batch #189
+Validation Batch #1: Accuracy = 0.960; Recall = 0.895; Precision = 0.938; Loss = 0.1007; Mini-Batch #190
+Validation Batch #1: Accuracy = 0.960; Recall = 0.895; Precision = 0.938; Loss = 0.1004; Mini-Batch #191
+Validation Batch #1: Accuracy = 0.961; Recall = 0.895; Precision = 0.939; Loss = 0.1000; Mini-Batch #192
+Validation Batch #1: Accuracy = 0.961; Recall = 0.895; Precision = 0.939; Loss = 0.0997; Mini-Batch #193
+Validation Batch #1: Accuracy = 0.961; Recall = 0.896; Precision = 0.939; Loss = 0.0993; Mini-Batch #194
+Validation Batch #1: Accuracy = 0.961; Recall = 0.896; Precision = 0.940; Loss = 0.0989; Mini-Batch #195
+Validation Batch #1: Accuracy = 0.961; Recall = 0.897; Precision = 0.940; Loss = 0.0984; Mini-Batch #196
+Validation Batch #1: Accuracy = 0.961; Recall = 0.897; Precision = 0.940; Loss = 0.0981; Mini-Batch #197
+Validation Batch #1: Accuracy = 0.962; Recall = 0.898; Precision = 0.940; Loss = 0.0976; Mini-Batch #198
+Validation Batch #1: Accuracy = 0.962; Recall = 0.898; Precision = 0.940; Loss = 0.0973; Mini-Batch #199
+Validation Batch #1: Accuracy = 0.962; Recall = 0.898; Precision = 0.941; Loss = 0.0969; Mini-Batch #200
+Validation Batch #1: Accuracy = 0.962; Recall = 0.899; Precision = 0.941; Loss = 0.0965; Mini-Batch #201
+Validation Batch #1: Accuracy = 0.962; Recall = 0.899; Precision = 0.941; Loss = 0.0962; Mini-Batch #202
+Validation Batch #1: Accuracy = 0.962; Recall = 0.900; Precision = 0.941; Loss = 0.0958; Mini-Batch #203
+Validation Batch #1: Accuracy = 0.963; Recall = 0.900; Precision = 0.942; Loss = 0.0954; Mini-Batch #204
+Validation Batch #1: Accuracy = 0.963; Recall = 0.901; Precision = 0.942; Loss = 0.0949; Mini-Batch #205
+Validation Batch #1: Accuracy = 0.963; Recall = 0.901; Precision = 0.942; Loss = 0.0946; Mini-Batch #206
+Validation Batch #1: Accuracy = 0.963; Recall = 0.902; Precision = 0.942; Loss = 0.0943; Mini-Batch #207
+Validation Batch #1: Accuracy = 0.963; Recall = 0.902; Precision = 0.943; Loss = 0.0939; Mini-Batch #208
+Validation Batch #1: Accuracy = 0.963; Recall = 0.903; Precision = 0.943; Loss = 0.0935; Mini-Batch #209
+Validation Batch #1: Accuracy = 0.964; Recall = 0.903; Precision = 0.943; Loss = 0.0931; Mini-Batch #210
+Validation Batch #1: Accuracy = 0.964; Recall = 0.903; Precision = 0.943; Loss = 0.0927; Mini-Batch #211
+Validation Batch #1: Accuracy = 0.964; Recall = 0.904; Precision = 0.943; Loss = 0.0925; Mini-Batch #212
+Validation Batch #1: Accuracy = 0.964; Recall = 0.904; Precision = 0.944; Loss = 0.0921; Mini-Batch #213
+Validation Batch #1: Accuracy = 0.964; Recall = 0.904; Precision = 0.944; Loss = 0.0917; Mini-Batch #214
+Validation Batch #1: Accuracy = 0.964; Recall = 0.905; Precision = 0.944; Loss = 0.0915; Mini-Batch #215
+Validation Batch #1: Accuracy = 0.964; Recall = 0.905; Precision = 0.944; Loss = 0.0911; Mini-Batch #216
+Validation Batch #1: Accuracy = 0.965; Recall = 0.905; Precision = 0.945; Loss = 0.0907; Mini-Batch #217
+Validation Batch #1: Accuracy = 0.965; Recall = 0.905; Precision = 0.945; Loss = 0.0904; Mini-Batch #218
+Validation Batch #1: Accuracy = 0.965; Recall = 0.906; Precision = 0.945; Loss = 0.0900; Mini-Batch #219
+Validation Batch #1: Accuracy = 0.965; Recall = 0.906; Precision = 0.946; Loss = 0.0898; Mini-Batch #220
+Validation Batch #1: Accuracy = 0.965; Recall = 0.907; Precision = 0.946; Loss = 0.0894; Mini-Batch #221
+Validation Batch #1: Accuracy = 0.965; Recall = 0.907; Precision = 0.946; Loss = 0.0890; Mini-Batch #222
+Validation Batch #1: Accuracy = 0.965; Recall = 0.908; Precision = 0.946; Loss = 0.0887; Mini-Batch #223
+Validation Batch #1: Accuracy = 0.966; Recall = 0.908; Precision = 0.947; Loss = 0.0883; Mini-Batch #224
+Validation Batch #1: Accuracy = 0.966; Recall = 0.908; Precision = 0.947; Loss = 0.0881; Mini-Batch #225
+Validation Batch #1: Accuracy = 0.966; Recall = 0.909; Precision = 0.947; Loss = 0.0877; Mini-Batch #226
+Validation Batch #1: Accuracy = 0.966; Recall = 0.909; Precision = 0.947; Loss = 0.0874; Mini-Batch #227
+Validation Batch #1: Accuracy = 0.966; Recall = 0.909; Precision = 0.947; Loss = 0.0871; Mini-Batch #228
+Validation Batch #1: Accuracy = 0.966; Recall = 0.910; Precision = 0.947; Loss = 0.0868; Mini-Batch #229
+Validation Batch #1: Accuracy = 0.966; Recall = 0.910; Precision = 0.948; Loss = 0.0864; Mini-Batch #230
+Validation Batch #1: Accuracy = 0.966; Recall = 0.910; Precision = 0.948; Loss = 0.0861; Mini-Batch #231
+Validation Batch #1: Accuracy = 0.967; Recall = 0.911; Precision = 0.948; Loss = 0.0861; Mini-Batch #232
+Validation Batch #1: Accuracy = 0.967; Recall = 0.911; Precision = 0.948; Loss = 0.0857; Mini-Batch #233
+Validation Batch #1: Accuracy = 0.967; Recall = 0.911; Precision = 0.948; Loss = 0.0854; Mini-Batch #234
+Validation Batch #1: Accuracy = 0.967; Recall = 0.911; Precision = 0.949; Loss = 0.0853; Mini-Batch #235
+Validation Batch #1: Accuracy = 0.967; Recall = 0.912; Precision = 0.949; Loss = 0.0850; Mini-Batch #236
+Validation Batch #1: Accuracy = 0.967; Recall = 0.912; Precision = 0.949; Loss = 0.0848; Mini-Batch #237
+Validation Batch #1: Accuracy = 0.967; Recall = 0.912; Precision = 0.949; Loss = 0.0845; Mini-Batch #238
+Validation Batch #1: Accuracy = 0.967; Recall = 0.912; Precision = 0.950; Loss = 0.0842; Mini-Batch #239
+Validation Batch #1: Accuracy = 0.967; Recall = 0.913; Precision = 0.950; Loss = 0.0839; Mini-Batch #240
+Validation Batch #1: Accuracy = 0.968; Recall = 0.913; Precision = 0.950; Loss = 0.0836; Mini-Batch #241
+Validation Batch #1: Accuracy = 0.968; Recall = 0.913; Precision = 0.950; Loss = 0.0834; Mini-Batch #242
+Validation Batch #1: Accuracy = 0.968; Recall = 0.914; Precision = 0.950; Loss = 0.0830; Mini-Batch #243
+Validation Batch #1: Accuracy = 0.968; Recall = 0.914; Precision = 0.950; Loss = 0.0829; Mini-Batch #244
+Validation Batch #1: Accuracy = 0.968; Recall = 0.915; Precision = 0.950; Loss = 0.0826; Mini-Batch #245
+Validation Batch #1: Accuracy = 0.968; Recall = 0.915; Precision = 0.950; Loss = 0.0824; Mini-Batch #246
+Validation Batch #1: Accuracy = 0.968; Recall = 0.915; Precision = 0.951; Loss = 0.0821; Mini-Batch #247
+Validation Batch #1: Accuracy = 0.968; Recall = 0.915; Precision = 0.951; Loss = 0.0818; Mini-Batch #248
+Validation Batch #1: Accuracy = 0.968; Recall = 0.916; Precision = 0.951; Loss = 0.0817; Mini-Batch #249
+Validation Batch #1: Accuracy = 0.968; Recall = 0.916; Precision = 0.951; Loss = 0.0815; Mini-Batch #250
+Validation Batch #1: Accuracy = 0.968; Recall = 0.916; Precision = 0.951; Loss = 0.0812; Mini-Batch #251
+Validation Batch #1: Accuracy = 0.969; Recall = 0.916; Precision = 0.951; Loss = 0.0811; Mini-Batch #252
+Validation Batch #1: Accuracy = 0.969; Recall = 0.916; Precision = 0.952; Loss = 0.0808; Mini-Batch #253
+Validation Batch #1: Accuracy = 0.969; Recall = 0.917; Precision = 0.952; Loss = 0.0805; Mini-Batch #254
+Validation Batch #1: Accuracy = 0.969; Recall = 0.917; Precision = 0.952; Loss = 0.0803; Mini-Batch #255
+Validation Batch #1: Accuracy = 0.969; Recall = 0.917; Precision = 0.952; Loss = 0.0800; Mini-Batch #256
+Validation Batch #1: Accuracy = 0.969; Recall = 0.918; Precision = 0.952; Loss = 0.0797; Mini-Batch #257
+Validation Batch #1: Accuracy = 0.969; Recall = 0.918; Precision = 0.952; Loss = 0.0795; Mini-Batch #258
+Validation Batch #1: Accuracy = 0.969; Recall = 0.918; Precision = 0.952; Loss = 0.0792; Mini-Batch #259
+Validation Batch #1: Accuracy = 0.969; Recall = 0.919; Precision = 0.953; Loss = 0.0789; Mini-Batch #260
+Validation Batch #1: Accuracy = 0.969; Recall = 0.919; Precision = 0.953; Loss = 0.0787; Mini-Batch #261
+Validation Batch #1: Accuracy = 0.970; Recall = 0.919; Precision = 0.953; Loss = 0.0784; Mini-Batch #262
+Validation Batch #1: Accuracy = 0.970; Recall = 0.919; Precision = 0.953; Loss = 0.0781; Mini-Batch #263
+Validation Batch #1: Accuracy = 0.970; Recall = 0.920; Precision = 0.953; Loss = 0.0779; Mini-Batch #264
+Validation Batch #1: Accuracy = 0.970; Recall = 0.920; Precision = 0.954; Loss = 0.0778; Mini-Batch #265
+Validation Batch #1: Accuracy = 0.970; Recall = 0.920; Precision = 0.954; Loss = 0.0776; Mini-Batch #266
+Validation Batch #1: Accuracy = 0.970; Recall = 0.920; Precision = 0.954; Loss = 0.0774; Mini-Batch #267
+Validation Batch #1: Accuracy = 0.970; Recall = 0.921; Precision = 0.954; Loss = 0.0771; Mini-Batch #268
+Validation Batch #1: Accuracy = 0.970; Recall = 0.921; Precision = 0.954; Loss = 0.0769; Mini-Batch #269
+Validation Batch #1: Accuracy = 0.970; Recall = 0.921; Precision = 0.954; Loss = 0.0766; Mini-Batch #270
+Validation Batch #1: Accuracy = 0.971; Recall = 0.922; Precision = 0.955; Loss = 0.0763; Mini-Batch #271
+Validation Batch #1: Accuracy = 0.971; Recall = 0.922; Precision = 0.955; Loss = 0.0761; Mini-Batch #272
+Validation Batch #1: Accuracy = 0.971; Recall = 0.922; Precision = 0.955; Loss = 0.0758; Mini-Batch #273
+Validation Batch #1: Accuracy = 0.971; Recall = 0.923; Precision = 0.955; Loss = 0.0757; Mini-Batch #274
+Validation Batch #1: Accuracy = 0.971; Recall = 0.923; Precision = 0.955; Loss = 0.0754; Mini-Batch #275
+Validation Batch #1: Accuracy = 0.971; Recall = 0.923; Precision = 0.955; Loss = 0.0753; Mini-Batch #276
+Validation Batch #1: Accuracy = 0.971; Recall = 0.924; Precision = 0.955; Loss = 0.0750; Mini-Batch #277
+Validation Batch #1: Accuracy = 0.971; Recall = 0.924; Precision = 0.955; Loss = 0.0748; Mini-Batch #278
+Validation Batch #1: Accuracy = 0.971; Recall = 0.924; Precision = 0.955; Loss = 0.0746; Mini-Batch #279
+Validation Batch #1: Accuracy = 0.971; Recall = 0.924; Precision = 0.955; Loss = 0.0744; Mini-Batch #280
+Validation Batch #1: Accuracy = 0.971; Recall = 0.925; Precision = 0.955; Loss = 0.0742; Mini-Batch #281
+Validation Batch #1: Accuracy = 0.971; Recall = 0.925; Precision = 0.956; Loss = 0.0740; Mini-Batch #282
+Validation Batch #1: Accuracy = 0.972; Recall = 0.925; Precision = 0.956; Loss = 0.0738; Mini-Batch #283
+Validation Batch #1: Accuracy = 0.972; Recall = 0.925; Precision = 0.956; Loss = 0.0735; Mini-Batch #284
+Validation Batch #1: Accuracy = 0.972; Recall = 0.926; Precision = 0.956; Loss = 0.0734; Mini-Batch #285
+Validation Batch #1: Accuracy = 0.972; Recall = 0.926; Precision = 0.956; Loss = 0.0732; Mini-Batch #286
+Validation Batch #1: Accuracy = 0.972; Recall = 0.926; Precision = 0.956; Loss = 0.0729; Mini-Batch #287
+Validation Batch #1: Accuracy = 0.972; Recall = 0.927; Precision = 0.956; Loss = 0.0727; Mini-Batch #288
+Validation Batch #1: Accuracy = 0.972; Recall = 0.927; Precision = 0.956; Loss = 0.0725; Mini-Batch #289
+Validation Batch #1: Accuracy = 0.972; Recall = 0.927; Precision = 0.957; Loss = 0.0722; Mini-Batch #290
+Validation Batch #1: Accuracy = 0.972; Recall = 0.927; Precision = 0.957; Loss = 0.0721; Mini-Batch #291
+Validation Batch #1: Accuracy = 0.972; Recall = 0.927; Precision = 0.957; Loss = 0.0720; Mini-Batch #292
+Validation Batch #1: Accuracy = 0.972; Recall = 0.928; Precision = 0.957; Loss = 0.0718; Mini-Batch #293
+Validation Batch #1: Accuracy = 0.972; Recall = 0.928; Precision = 0.957; Loss = 0.0715; Mini-Batch #294
+Validation Batch #1: Accuracy = 0.973; Recall = 0.928; Precision = 0.957; Loss = 0.0713; Mini-Batch #295
+Validation Batch #1: Accuracy = 0.973; Recall = 0.928; Precision = 0.958; Loss = 0.0711; Mini-Batch #296
+Validation Batch #1: Accuracy = 0.973; Recall = 0.929; Precision = 0.958; Loss = 0.0709; Mini-Batch #297
+Validation Batch #1: Accuracy = 0.973; Recall = 0.929; Precision = 0.958; Loss = 0.0707; Mini-Batch #298
+Validation Batch #1: Accuracy = 0.973; Recall = 0.929; Precision = 0.958; Loss = 0.0704; Mini-Batch #299
+Validation Batch #1: Accuracy = 0.973; Recall = 0.929; Precision = 0.958; Loss = 0.0703; Mini-Batch #300
+Validation Batch #1: Accuracy = 0.973; Recall = 0.930; Precision = 0.958; Loss = 0.0701; Mini-Batch #301
+Validation Batch #1: Accuracy = 0.973; Recall = 0.930; Precision = 0.958; Loss = 0.0699; Mini-Batch #302
+Validation Batch #1: Accuracy = 0.973; Recall = 0.930; Precision = 0.958; Loss = 0.0698; Mini-Batch #303
+Validation Batch #1: Accuracy = 0.973; Recall = 0.930; Precision = 0.958; Loss = 0.0696; Mini-Batch #304
+Validation Batch #1: Accuracy = 0.973; Recall = 0.930; Precision = 0.959; Loss = 0.0694; Mini-Batch #305
+Validation Batch #1: Accuracy = 0.973; Recall = 0.930; Precision = 0.959; Loss = 0.0692; Mini-Batch #306
+Validation Batch #1: Accuracy = 0.974; Recall = 0.931; Precision = 0.959; Loss = 0.0690; Mini-Batch #307
+Validation Batch #1: Accuracy = 0.974; Recall = 0.931; Precision = 0.959; Loss = 0.0688; Mini-Batch #308
+Validation Batch #1: Accuracy = 0.974; Recall = 0.931; Precision = 0.959; Loss = 0.0687; Mini-Batch #309
+Validation Batch #1: Accuracy = 0.974; Recall = 0.931; Precision = 0.959; Loss = 0.0685; Mini-Batch #310
+Validation Batch #1: Accuracy = 0.974; Recall = 0.931; Precision = 0.959; Loss = 0.0683; Mini-Batch #311
+Validation Batch #1: Accuracy = 0.974; Recall = 0.931; Precision = 0.959; Loss = 0.0681; Mini-Batch #312
+Validation Batch #1: Accuracy = 0.974; Recall = 0.932; Precision = 0.959; Loss = 0.0679; Mini-Batch #313
+Validation Batch #1: Accuracy = 0.974; Recall = 0.932; Precision = 0.960; Loss = 0.0677; Mini-Batch #314
+Validation Batch #1: Accuracy = 0.974; Recall = 0.932; Precision = 0.960; Loss = 0.0676; Mini-Batch #315
+Validation Batch #1: Accuracy = 0.974; Recall = 0.932; Precision = 0.960; Loss = 0.0674; Mini-Batch #316
+Validation Batch #1: Accuracy = 0.974; Recall = 0.932; Precision = 0.960; Loss = 0.0672; Mini-Batch #317
+Validation Batch #1: Accuracy = 0.974; Recall = 0.932; Precision = 0.960; Loss = 0.0670; Mini-Batch #318
+Validation Batch #1: Accuracy = 0.974; Recall = 0.933; Precision = 0.960; Loss = 0.0668; Mini-Batch #319
+Validation Batch #1: Accuracy = 0.974; Recall = 0.933; Precision = 0.960; Loss = 0.0667; Mini-Batch #320
+Validation Batch #1: Accuracy = 0.975; Recall = 0.933; Precision = 0.960; Loss = 0.0665; Mini-Batch #321
+Validation Batch #1: Accuracy = 0.975; Recall = 0.933; Precision = 0.960; Loss = 0.0663; Mini-Batch #322
+Validation Batch #1: Accuracy = 0.975; Recall = 0.933; Precision = 0.960; Loss = 0.0662; Mini-Batch #323
+Validation Batch #1: Accuracy = 0.975; Recall = 0.934; Precision = 0.961; Loss = 0.0660; Mini-Batch #324
+Validation Batch #1: Accuracy = 0.975; Recall = 0.934; Precision = 0.961; Loss = 0.0658; Mini-Batch #325
+Validation Batch #1: Accuracy = 0.975; Recall = 0.934; Precision = 0.961; Loss = 0.0656; Mini-Batch #326
+Validation Batch #1: Accuracy = 0.975; Recall = 0.934; Precision = 0.961; Loss = 0.0654; Mini-Batch #327
+Validation Batch #1: Accuracy = 0.975; Recall = 0.934; Precision = 0.961; Loss = 0.0653; Mini-Batch #328
+Validation Batch #1: Accuracy = 0.975; Recall = 0.935; Precision = 0.961; Loss = 0.0651; Mini-Batch #329
+Validation Batch #1: Accuracy = 0.975; Recall = 0.935; Precision = 0.961; Loss = 0.0649; Mini-Batch #330
+Validation Batch #1: Accuracy = 0.975; Recall = 0.935; Precision = 0.961; Loss = 0.0647; Mini-Batch #331
+Validation Batch #1: Accuracy = 0.975; Recall = 0.935; Precision = 0.961; Loss = 0.0645; Mini-Batch #332
+Validation Batch #1: Accuracy = 0.975; Recall = 0.935; Precision = 0.962; Loss = 0.0644; Mini-Batch #333
+Validation Batch #1: Accuracy = 0.975; Recall = 0.936; Precision = 0.962; Loss = 0.0642; Mini-Batch #334
+Validation Batch #1: Accuracy = 0.976; Recall = 0.936; Precision = 0.962; Loss = 0.0640; Mini-Batch #335
+Validation Batch #1: Accuracy = 0.976; Recall = 0.936; Precision = 0.962; Loss = 0.0640; Mini-Batch #336
+Validation Batch #1: Accuracy = 0.976; Recall = 0.936; Precision = 0.962; Loss = 0.0638; Mini-Batch #337
+Validation Batch #1: Accuracy = 0.976; Recall = 0.936; Precision = 0.962; Loss = 0.0636; Mini-Batch #338
+Validation Batch #1: Accuracy = 0.976; Recall = 0.937; Precision = 0.962; Loss = 0.0635; Mini-Batch #339
+Validation Batch #1: Accuracy = 0.976; Recall = 0.937; Precision = 0.962; Loss = 0.0633; Mini-Batch #340
+Validation Batch #1: Accuracy = 0.976; Recall = 0.937; Precision = 0.962; Loss = 0.0631; Mini-Batch #341
+Validation Batch #1: Accuracy = 0.976; Recall = 0.937; Precision = 0.963; Loss = 0.0630; Mini-Batch #342
+Validation Batch #1: Accuracy = 0.976; Recall = 0.937; Precision = 0.963; Loss = 0.0628; Mini-Batch #343
+Validation Batch #1: Accuracy = 0.976; Recall = 0.937; Precision = 0.963; Loss = 0.0626; Mini-Batch #344
+Validation Batch #1: Accuracy = 0.976; Recall = 0.938; Precision = 0.963; Loss = 0.0624; Mini-Batch #345
+Validation Batch #1: Accuracy = 0.976; Recall = 0.938; Precision = 0.963; Loss = 0.0623; Mini-Batch #346
+Validation Batch #1: Accuracy = 0.976; Recall = 0.938; Precision = 0.963; Loss = 0.0623; Mini-Batch #347
+Validation Batch #1: Accuracy = 0.976; Recall = 0.938; Precision = 0.963; Loss = 0.0621; Mini-Batch #348
+Validation Batch #1: Accuracy = 0.976; Recall = 0.938; Precision = 0.963; Loss = 0.0619; Mini-Batch #349
+Validation Batch #1: Accuracy = 0.976; Recall = 0.938; Precision = 0.963; Loss = 0.0618; Mini-Batch #350
+Validation Batch #1: Accuracy = 0.977; Recall = 0.939; Precision = 0.963; Loss = 0.0616; Mini-Batch #351
+Validation Batch #1: Accuracy = 0.977; Recall = 0.939; Precision = 0.963; Loss = 0.0614; Mini-Batch #352
+Validation Batch #1: Accuracy = 0.977; Recall = 0.939; Precision = 0.964; Loss = 0.0613; Mini-Batch #353
+Validation Batch #1: Accuracy = 0.977; Recall = 0.939; Precision = 0.964; Loss = 0.0611; Mini-Batch #354
+Validation Batch #1: Accuracy = 0.977; Recall = 0.939; Precision = 0.964; Loss = 0.0610; Mini-Batch #355
+Validation Batch #1: Accuracy = 0.977; Recall = 0.939; Precision = 0.964; Loss = 0.0608; Mini-Batch #356
+Validation Batch #1: Accuracy = 0.977; Recall = 0.939; Precision = 0.964; Loss = 0.0607; Mini-Batch #357
+Validation Batch #1: Accuracy = 0.977; Recall = 0.940; Precision = 0.964; Loss = 0.0605; Mini-Batch #358
+Validation Batch #1: Accuracy = 0.977; Recall = 0.940; Precision = 0.964; Loss = 0.0604; Mini-Batch #359
+Validation Batch #1: Accuracy = 0.977; Recall = 0.940; Precision = 0.964; Loss = 0.0602; Mini-Batch #360
+Validation Batch #1: Accuracy = 0.977; Recall = 0.940; Precision = 0.964; Loss = 0.0601; Mini-Batch #361
+Validation Batch #1: Accuracy = 0.977; Recall = 0.940; Precision = 0.964; Loss = 0.0600; Mini-Batch #362
+Validation Batch #1: Accuracy = 0.977; Recall = 0.940; Precision = 0.964; Loss = 0.0598; Mini-Batch #363
+Validation Batch #1: Accuracy = 0.977; Recall = 0.941; Precision = 0.964; Loss = 0.0597; Mini-Batch #364
+Validation Batch #1: Accuracy = 0.977; Recall = 0.940; Precision = 0.964; Loss = 0.0596; Mini-Batch #365
+Validation Batch #1: Accuracy = 0.977; Recall = 0.940; Precision = 0.965; Loss = 0.0595; Mini-Batch #366
+Validation Batch #1: Accuracy = 0.977; Recall = 0.941; Precision = 0.965; Loss = 0.0594; Mini-Batch #367
+Validation Batch #1: Accuracy = 0.977; Recall = 0.941; Precision = 0.965; Loss = 0.0592; Mini-Batch #368
+Validation Batch #1: Accuracy = 0.978; Recall = 0.941; Precision = 0.965; Loss = 0.0591; Mini-Batch #369
+Validation Batch #1: Accuracy = 0.978; Recall = 0.941; Precision = 0.965; Loss = 0.0590; Mini-Batch #370
+Validation Batch #1: Accuracy = 0.978; Recall = 0.941; Precision = 0.965; Loss = 0.0588; Mini-Batch #371
+Validation Batch #1: Accuracy = 0.978; Recall = 0.941; Precision = 0.965; Loss = 0.0587; Mini-Batch #372
+Validation Batch #1: Accuracy = 0.978; Recall = 0.942; Precision = 0.965; Loss = 0.0586; Mini-Batch #373
+Validation Batch #1: Accuracy = 0.978; Recall = 0.942; Precision = 0.965; Loss = 0.0585; Mini-Batch #374
+Validation Batch #1: Accuracy = 0.978; Recall = 0.942; Precision = 0.965; Loss = 0.0583; Mini-Batch #375
+Validation Batch #1: Accuracy = 0.978; Recall = 0.942; Precision = 0.965; Loss = 0.0582; Mini-Batch #376
+Validation Batch #1: Accuracy = 0.978; Recall = 0.942; Precision = 0.965; Loss = 0.0581; Mini-Batch #377
+Validation Batch #1: Accuracy = 0.978; Recall = 0.942; Precision = 0.966; Loss = 0.0579; Mini-Batch #378
+Validation Batch #1: Accuracy = 0.978; Recall = 0.942; Precision = 0.966; Loss = 0.0578; Mini-Batch #379
+Validation Batch #1: Accuracy = 0.978; Recall = 0.943; Precision = 0.966; Loss = 0.0577; Mini-Batch #380
+Validation Batch #1: Accuracy = 0.978; Recall = 0.943; Precision = 0.966; Loss = 0.0577; Mini-Batch #381
+Validation Batch #1: Accuracy = 0.978; Recall = 0.943; Precision = 0.966; Loss = 0.0575; Mini-Batch #382
+Validation Batch #1: Accuracy = 0.978; Recall = 0.943; Precision = 0.966; Loss = 0.0574; Mini-Batch #383
+Validation Batch #1: Accuracy = 0.978; Recall = 0.943; Precision = 0.966; Loss = 0.0573; Mini-Batch #384
+Validation Batch #1: Accuracy = 0.978; Recall = 0.943; Precision = 0.966; Loss = 0.0571; Mini-Batch #385
+Validation Batch #1: Accuracy = 0.978; Recall = 0.943; Precision = 0.966; Loss = 0.0570; Mini-Batch #386
+Validation Batch #1: Accuracy = 0.978; Recall = 0.944; Precision = 0.966; Loss = 0.0569; Mini-Batch #387
+Validation Batch #1: Accuracy = 0.978; Recall = 0.944; Precision = 0.966; Loss = 0.0568; Mini-Batch #388
+Validation Batch #1: Accuracy = 0.979; Recall = 0.944; Precision = 0.966; Loss = 0.0567; Mini-Batch #389
+Validation Batch #1: Accuracy = 0.979; Recall = 0.944; Precision = 0.966; Loss = 0.0566; Mini-Batch #390
+Validation Batch #1: Accuracy = 0.979; Recall = 0.944; Precision = 0.966; Loss = 0.0565; Mini-Batch #391
+Validation Batch #1: Accuracy = 0.979; Recall = 0.944; Precision = 0.966; Loss = 0.0563; Mini-Batch #392
+Validation Batch #1: Accuracy = 0.979; Recall = 0.944; Precision = 0.966; Loss = 0.0562; Mini-Batch #393
+Validation Batch #1: Accuracy = 0.979; Recall = 0.944; Precision = 0.967; Loss = 0.0561; Mini-Batch #394
+Validation Batch #1: Accuracy = 0.979; Recall = 0.944; Precision = 0.967; Loss = 0.0559; Mini-Batch #395
+Validation Batch #1: Accuracy = 0.979; Recall = 0.945; Precision = 0.967; Loss = 0.0558; Mini-Batch #396
+Validation Batch #1: Accuracy = 0.979; Recall = 0.945; Precision = 0.967; Loss = 0.0557; Mini-Batch #397
+Validation Batch #1: Accuracy = 0.979; Recall = 0.945; Precision = 0.967; Loss = 0.0556; Mini-Batch #398
+Validation Batch #1: Accuracy = 0.979; Recall = 0.945; Precision = 0.967; Loss = 0.0555; Mini-Batch #399
+Validation Batch #1: Accuracy = 0.979; Recall = 0.945; Precision = 0.967; Loss = 0.0553; Mini-Batch #400
+Validation Batch #1: Accuracy = 0.979; Recall = 0.945; Precision = 0.967; Loss = 0.0552; Mini-Batch #401
+Validation Batch #1: Accuracy = 0.979; Recall = 0.945; Precision = 0.967; Loss = 0.0551; Mini-Batch #402
+Validation Batch #1: Accuracy = 0.979; Recall = 0.946; Precision = 0.967; Loss = 0.0550; Mini-Batch #403
+Validation Batch #1: Accuracy = 0.979; Recall = 0.946; Precision = 0.967; Loss = 0.0549; Mini-Batch #404
+Validation Batch #1: Accuracy = 0.979; Recall = 0.946; Precision = 0.967; Loss = 0.0549; Mini-Batch #405
+Validation Batch #1: Accuracy = 0.979; Recall = 0.946; Precision = 0.967; Loss = 0.0548; Mini-Batch #406
+Validation Batch #1: Accuracy = 0.979; Recall = 0.946; Precision = 0.967; Loss = 0.0546; Mini-Batch #407
+Validation Batch #1: Accuracy = 0.979; Recall = 0.946; Precision = 0.968; Loss = 0.0545; Mini-Batch #408
+Validation Batch #1: Accuracy = 0.979; Recall = 0.946; Precision = 0.968; Loss = 0.0544; Mini-Batch #409
+Validation Batch #1: Accuracy = 0.979; Recall = 0.946; Precision = 0.968; Loss = 0.0543; Mini-Batch #410
+Validation Batch #1: Accuracy = 0.979; Recall = 0.946; Precision = 0.968; Loss = 0.0542; Mini-Batch #411
+Validation Batch #1: Accuracy = 0.980; Recall = 0.947; Precision = 0.968; Loss = 0.0541; Mini-Batch #412
+Validation Batch #1: Accuracy = 0.980; Recall = 0.947; Precision = 0.968; Loss = 0.0539; Mini-Batch #413
+Validation Batch #1: Accuracy = 0.980; Recall = 0.947; Precision = 0.968; Loss = 0.0539; Mini-Batch #414
+Validation Batch #1: Accuracy = 0.980; Recall = 0.947; Precision = 0.968; Loss = 0.0537; Mini-Batch #415
+Validation Batch #1: Accuracy = 0.980; Recall = 0.947; Precision = 0.968; Loss = 0.0536; Mini-Batch #416
+Validation Batch #1: Accuracy = 0.980; Recall = 0.947; Precision = 0.968; Loss = 0.0535; Mini-Batch #417
+Validation Batch #1: Accuracy = 0.980; Recall = 0.947; Precision = 0.968; Loss = 0.0534; Mini-Batch #418
+Validation Batch #1: Accuracy = 0.980; Recall = 0.948; Precision = 0.968; Loss = 0.0533; Mini-Batch #419
+Validation Batch #1: Accuracy = 0.980; Recall = 0.948; Precision = 0.968; Loss = 0.0532; Mini-Batch #420
+Validation Batch #1: Accuracy = 0.980; Recall = 0.948; Precision = 0.968; Loss = 0.0531; Mini-Batch #421
+Validation Batch #1: Accuracy = 0.980; Recall = 0.948; Precision = 0.968; Loss = 0.0530; Mini-Batch #422
+Validation Batch #1: Accuracy = 0.980; Recall = 0.948; Precision = 0.968; Loss = 0.0530; Mini-Batch #423
+Validation Batch #1: Accuracy = 0.980; Recall = 0.948; Precision = 0.968; Loss = 0.0529; Mini-Batch #424
+Validation Batch #1: Accuracy = 0.980; Recall = 0.948; Precision = 0.968; Loss = 0.0528; Mini-Batch #425
+Validation Batch #1: Accuracy = 0.980; Recall = 0.948; Precision = 0.969; Loss = 0.0527; Mini-Batch #426
+Validation Batch #1: Accuracy = 0.980; Recall = 0.948; Precision = 0.969; Loss = 0.0526; Mini-Batch #427
+Validation Batch #1: Accuracy = 0.980; Recall = 0.948; Precision = 0.969; Loss = 0.0524; Mini-Batch #428
+Validation Batch #1: Accuracy = 0.980; Recall = 0.948; Precision = 0.969; Loss = 0.0523; Mini-Batch #429
+Validation Batch #1: Accuracy = 0.980; Recall = 0.948; Precision = 0.969; Loss = 0.0523; Mini-Batch #430
+Validation Batch #1: Accuracy = 0.980; Recall = 0.949; Precision = 0.969; Loss = 0.0522; Mini-Batch #431
+Validation Batch #1: Accuracy = 0.980; Recall = 0.949; Precision = 0.969; Loss = 0.0520; Mini-Batch #432
+Validation Batch #1: Accuracy = 0.980; Recall = 0.949; Precision = 0.969; Loss = 0.0519; Mini-Batch #433
+Validation Batch #1: Accuracy = 0.980; Recall = 0.949; Precision = 0.969; Loss = 0.0518; Mini-Batch #434
+Validation Batch #1: Accuracy = 0.980; Recall = 0.949; Precision = 0.969; Loss = 0.0518; Mini-Batch #435
+Validation Batch #1: Accuracy = 0.980; Recall = 0.949; Precision = 0.969; Loss = 0.0516; Mini-Batch #436
+Validation Batch #1: Accuracy = 0.981; Recall = 0.949; Precision = 0.969; Loss = 0.0515; Mini-Batch #437
+Validation Batch #1: Accuracy = 0.981; Recall = 0.949; Precision = 0.969; Loss = 0.0514; Mini-Batch #438
+Validation Batch #1: Accuracy = 0.981; Recall = 0.949; Precision = 0.970; Loss = 0.0514; Mini-Batch #439
+Validation Batch #1: Accuracy = 0.981; Recall = 0.949; Precision = 0.969; Loss = 0.0514; Mini-Batch #440
+Validation Batch #1: Accuracy = 0.981; Recall = 0.950; Precision = 0.969; Loss = 0.0513; Mini-Batch #441
+Validation Batch #1: Accuracy = 0.981; Recall = 0.950; Precision = 0.969; Loss = 0.0512; Mini-Batch #442
+Validation Batch #1: Accuracy = 0.981; Recall = 0.950; Precision = 0.969; Loss = 0.0511; Mini-Batch #443
+Validation Batch #1: Accuracy = 0.981; Recall = 0.950; Precision = 0.969; Loss = 0.0510; Mini-Batch #444
+Validation Batch #1: Accuracy = 0.981; Recall = 0.950; Precision = 0.969; Loss = 0.0509; Mini-Batch #445
+Validation Batch #1: Accuracy = 0.981; Recall = 0.950; Precision = 0.970; Loss = 0.0508; Mini-Batch #446
+Validation Batch #1: Accuracy = 0.981; Recall = 0.950; Precision = 0.970; Loss = 0.0507; Mini-Batch #447
+Validation Batch #1: Accuracy = 0.981; Recall = 0.950; Precision = 0.970; Loss = 0.0506; Mini-Batch #448
+Validation Batch #1: Accuracy = 0.981; Recall = 0.950; Precision = 0.970; Loss = 0.0505; Mini-Batch #449
+Validation Batch #1: Accuracy = 0.981; Recall = 0.951; Precision = 0.970; Loss = 0.0505; Mini-Batch #450
+Validation Batch #1: Accuracy = 0.981; Recall = 0.951; Precision = 0.970; Loss = 0.0504; Mini-Batch #451
+Validation Batch #1: Accuracy = 0.981; Recall = 0.951; Precision = 0.970; Loss = 0.0503; Mini-Batch #452
+Validation Batch #1: Accuracy = 0.981; Recall = 0.951; Precision = 0.970; Loss = 0.0502; Mini-Batch #453
+Validation Batch #1: Accuracy = 0.981; Recall = 0.951; Precision = 0.970; Loss = 0.0501; Mini-Batch #454
+Validation Batch #1: Accuracy = 0.981; Recall = 0.951; Precision = 0.970; Loss = 0.0500; Mini-Batch #455
+Validation Batch #1: Accuracy = 0.981; Recall = 0.951; Precision = 0.970; Loss = 0.0499; Mini-Batch #456
+Validation Batch #1: Accuracy = 0.981; Recall = 0.951; Precision = 0.970; Loss = 0.0498; Mini-Batch #457
+Validation Batch #1: Accuracy = 0.981; Recall = 0.951; Precision = 0.970; Loss = 0.0497; Mini-Batch #458
+Validation Batch #1: Accuracy = 0.981; Recall = 0.951; Precision = 0.970; Loss = 0.0496; Mini-Batch #459
+Validation Batch #1: Accuracy = 0.981; Recall = 0.952; Precision = 0.970; Loss = 0.0495; Mini-Batch #460
+Validation Batch #1: Accuracy = 0.981; Recall = 0.952; Precision = 0.970; Loss = 0.0494; Mini-Batch #461
+Validation Batch #1: Accuracy = 0.981; Recall = 0.952; Precision = 0.970; Loss = 0.0493; Mini-Batch #462
+Validation Batch #1: Accuracy = 0.981; Recall = 0.952; Precision = 0.971; Loss = 0.0492; Mini-Batch #463
+Validation Batch #1: Accuracy = 0.981; Recall = 0.952; Precision = 0.971; Loss = 0.0491; Mini-Batch #464
+Validation Batch #1: Accuracy = 0.981; Recall = 0.952; Precision = 0.971; Loss = 0.0490; Mini-Batch #465
+Validation Batch #1: Accuracy = 0.982; Recall = 0.952; Precision = 0.971; Loss = 0.0489; Mini-Batch #466
+Validation Batch #1: Accuracy = 0.982; Recall = 0.952; Precision = 0.971; Loss = 0.0488; Mini-Batch #467
+Validation Batch #1: Accuracy = 0.982; Recall = 0.952; Precision = 0.971; Loss = 0.0487; Mini-Batch #468
+INFO:absl:Step #500: rate 0.001000, accuracy 98.27%, recall 95.52%, precision 97.25%, cross entropy 0.045937
+INFO:absl:Step 500 (nonstreaming): Validation: recall at no faph = 63.600 with cutoff 0.99, accuracy = 99.60%, recall = 99.60%, precision = 100.00%, ambient false positives = 150, estimated false positives per hour = 15.51113, loss = 0.00510, auc = 0.99992, average viable recall = 0.813665373
+INFO:absl:Sharding callback duration: 166 microseconds
+INFO:absl:So far the best minimization quantity is 15.511 with best maximization quantity of 81.36654%; no faph cutoff is 0.99
+Validation Batch #1: Accuracy = 0.982; Recall = 0.952; Precision = 0.971; Loss = 0.0486; Mini-Batch #469
+Validation Batch #1: Accuracy = 0.982; Recall = 0.953; Precision = 0.971; Loss = 0.0485; Mini-Batch #470
+Validation Batch #1: Accuracy = 0.982; Recall = 0.953; Precision = 0.971; Loss = 0.0484; Mini-Batch #471
+Validation Batch #1: Accuracy = 0.982; Recall = 0.953; Precision = 0.971; Loss = 0.0484; Mini-Batch #472
+Validation Batch #1: Accuracy = 0.982; Recall = 0.953; Precision = 0.971; Loss = 0.0483; Mini-Batch #473
+Validation Batch #1: Accuracy = 0.982; Recall = 0.953; Precision = 0.971; Loss = 0.0482; Mini-Batch #474
+Validation Batch #1: Accuracy = 0.982; Recall = 0.953; Precision = 0.971; Loss = 0.0481; Mini-Batch #475
+Validation Batch #1: Accuracy = 0.982; Recall = 0.953; Precision = 0.971; Loss = 0.0480; Mini-Batch #476
+Validation Batch #1: Accuracy = 0.982; Recall = 0.953; Precision = 0.971; Loss = 0.0479; Mini-Batch #477
+Validation Batch #1: Accuracy = 0.982; Recall = 0.953; Precision = 0.971; Loss = 0.0478; Mini-Batch #478
+Validation Batch #1: Accuracy = 0.982; Recall = 0.953; Precision = 0.972; Loss = 0.0477; Mini-Batch #479
+Validation Batch #1: Accuracy = 0.982; Recall = 0.954; Precision = 0.972; Loss = 0.0476; Mini-Batch #480
+Validation Batch #1: Accuracy = 0.982; Recall = 0.954; Precision = 0.972; Loss = 0.0475; Mini-Batch #481
+Validation Batch #1: Accuracy = 0.982; Recall = 0.954; Precision = 0.972; Loss = 0.0474; Mini-Batch #482
+Validation Batch #1: Accuracy = 0.982; Recall = 0.954; Precision = 0.972; Loss = 0.0474; Mini-Batch #483
+Validation Batch #1: Accuracy = 0.982; Recall = 0.954; Precision = 0.972; Loss = 0.0473; Mini-Batch #484
+Validation Batch #1: Accuracy = 0.982; Recall = 0.954; Precision = 0.972; Loss = 0.0472; Mini-Batch #485
+Validation Batch #1: Accuracy = 0.982; Recall = 0.954; Precision = 0.972; Loss = 0.0471; Mini-Batch #486
+Validation Batch #1: Accuracy = 0.982; Recall = 0.954; Precision = 0.972; Loss = 0.0470; Mini-Batch #487
+Validation Batch #1: Accuracy = 0.982; Recall = 0.954; Precision = 0.972; Loss = 0.0469; Mini-Batch #488
+Validation Batch #1: Accuracy = 0.982; Recall = 0.954; Precision = 0.972; Loss = 0.0468; Mini-Batch #489
+Validation Batch #1: Accuracy = 0.982; Recall = 0.954; Precision = 0.972; Loss = 0.0467; Mini-Batch #490
+Validation Batch #1: Accuracy = 0.982; Recall = 0.954; Precision = 0.972; Loss = 0.0466; Mini-Batch #491
+Validation Batch #1: Accuracy = 0.982; Recall = 0.955; Precision = 0.972; Loss = 0.0466; Mini-Batch #492
+Validation Batch #1: Accuracy = 0.982; Recall = 0.955; Precision = 0.972; Loss = 0.0465; Mini-Batch #493
+Validation Batch #1: Accuracy = 0.983; Recall = 0.955; Precision = 0.972; Loss = 0.0464; Mini-Batch #494
+Validation Batch #1: Accuracy = 0.983; Recall = 0.955; Precision = 0.972; Loss = 0.0464; Mini-Batch #495
+Validation Batch #1: Accuracy = 0.983; Recall = 0.955; Precision = 0.972; Loss = 0.0463; Mini-Batch #496
+Validation Batch #1: Accuracy = 0.983; Recall = 0.955; Precision = 0.972; Loss = 0.0462; Mini-Batch #497
+Validation Batch #1: Accuracy = 0.983; Recall = 0.955; Precision = 0.972; Loss = 0.0461; Mini-Batch #498
+Validation Batch #1: Accuracy = 0.983; Recall = 0.955; Precision = 0.972; Loss = 0.0460; Mini-Batch #499
+Validation Batch #2: Accuracy = 0.983; Recall = 0.955; Precision = 0.973; Loss = 0.0459; Mini-Batch #0
+Validation Batch #2: Accuracy = 1.000; Recall = 1.000; Precision = 1.000; Loss = 0.0054; Mini-Batch #1
+Validation Batch #2: Accuracy = 1.000; Recall = 1.000; Precision = 1.000; Loss = 0.0056; Mini-Batch #2
+Validation Batch #2: Accuracy = 1.000; Recall = 1.000; Precision = 1.000; Loss = 0.0055; Mini-Batch #3
+Validation Batch #2: Accuracy = 1.000; Recall = 1.000; Precision = 1.000; Loss = 0.0043; Mini-Batch #4
+Validation Batch #2: Accuracy = 1.000; Recall = 1.000; Precision = 1.000; Loss = 0.0036; Mini-Batch #5
+Validation Batch #2: Accuracy = 1.000; Recall = 1.000; Precision = 1.000; Loss = 0.0039; Mini-Batch #6
+Validation Batch #2: Accuracy = 1.000; Recall = 1.000; Precision = 1.000; Loss = 0.0042; Mini-Batch #7
+Validation Batch #2: Accuracy = 1.000; Recall = 1.000; Precision = 1.000; Loss = 0.0046; Mini-Batch #8
+Validation Batch #2: Accuracy = 1.000; Recall = 1.000; Precision = 1.000; Loss = 0.0042; Mini-Batch #9
+Validation Batch #2: Accuracy = 1.000; Recall = 1.000; Precision = 1.000; Loss = 0.0040; Mini-Batch #10
+Validation Batch #2: Accuracy = 1.000; Recall = 1.000; Precision = 1.000; Loss = 0.0037; Mini-Batch #11
+Validation Batch #2: Accuracy = 1.000; Recall = 1.000; Precision = 1.000; Loss = 0.0034; Mini-Batch #12
+Validation Batch #2: Accuracy = 1.000; Recall = 1.000; Precision = 1.000; Loss = 0.0032; Mini-Batch #13
+Validation Batch #2: Accuracy = 1.000; Recall = 1.000; Precision = 1.000; Loss = 0.0036; Mini-Batch #14
+Validation Batch #2: Accuracy = 1.000; Recall = 1.000; Precision = 1.000; Loss = 0.0034; Mini-Batch #15
+Validation Batch #2: Accuracy = 1.000; Recall = 1.000; Precision = 1.000; Loss = 0.0034; Mini-Batch #16
+Validation Batch #2: Accuracy = 1.000; Recall = 1.000; Precision = 1.000; Loss = 0.0033; Mini-Batch #17
+Validation Batch #2: Accuracy = 1.000; Recall = 0.998; Precision = 1.000; Loss = 0.0042; Mini-Batch #18
+Validation Batch #2: Accuracy = 1.000; Recall = 0.998; Precision = 1.000; Loss = 0.0042; Mini-Batch #19
+Validation Batch #2: Accuracy = 1.000; Recall = 0.998; Precision = 1.000; Loss = 0.0043; Mini-Batch #20
+Validation Batch #2: Accuracy = 1.000; Recall = 0.999; Precision = 1.000; Loss = 0.0043; Mini-Batch #21
+Validation Batch #2: Accuracy = 1.000; Recall = 0.999; Precision = 1.000; Loss = 0.0043; Mini-Batch #22
+Validation Batch #2: Accuracy = 1.000; Recall = 0.999; Precision = 1.000; Loss = 0.0042; Mini-Batch #23
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 1.000; Loss = 0.0045; Mini-Batch #24
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 1.000; Loss = 0.0044; Mini-Batch #25
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 1.000; Loss = 0.0043; Mini-Batch #26
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 1.000; Loss = 0.0042; Mini-Batch #27
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 1.000; Loss = 0.0041; Mini-Batch #28
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 1.000; Loss = 0.0039; Mini-Batch #29
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 1.000; Loss = 0.0038; Mini-Batch #30
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.999; Loss = 0.0042; Mini-Batch #31
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.999; Loss = 0.0041; Mini-Batch #32
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.999; Loss = 0.0040; Mini-Batch #33
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.999; Loss = 0.0041; Mini-Batch #34
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.999; Loss = 0.0042; Mini-Batch #35
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.999; Loss = 0.0044; Mini-Batch #36
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.999; Loss = 0.0043; Mini-Batch #37
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.999; Loss = 0.0044; Mini-Batch #38
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.999; Loss = 0.0045; Mini-Batch #39
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.999; Loss = 0.0044; Mini-Batch #40
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.999; Loss = 0.0043; Mini-Batch #41
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.999; Loss = 0.0043; Mini-Batch #42
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.999; Loss = 0.0043; Mini-Batch #43
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.998; Loss = 0.0045; Mini-Batch #44
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.998; Loss = 0.0044; Mini-Batch #45
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0047; Mini-Batch #46
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0048; Mini-Batch #47
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0048; Mini-Batch #48
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0047; Mini-Batch #49
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0047; Mini-Batch #50
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0046; Mini-Batch #51
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0046; Mini-Batch #52
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0047; Mini-Batch #53
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.997; Loss = 0.0049; Mini-Batch #54
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.997; Loss = 0.0048; Mini-Batch #55
+Validation Batch #2: Accuracy = 0.998; Recall = 0.997; Precision = 0.997; Loss = 0.0048; Mini-Batch #56
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.997; Loss = 0.0055; Mini-Batch #57
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.997; Loss = 0.0055; Mini-Batch #58
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.997; Loss = 0.0054; Mini-Batch #59
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.997; Loss = 0.0053; Mini-Batch #60
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.997; Loss = 0.0053; Mini-Batch #61
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.997; Loss = 0.0052; Mini-Batch #62
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.997; Loss = 0.0060; Mini-Batch #63
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.997; Loss = 0.0059; Mini-Batch #64
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.997; Loss = 0.0059; Mini-Batch #65
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.997; Loss = 0.0058; Mini-Batch #66
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.997; Loss = 0.0058; Mini-Batch #67
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.997; Loss = 0.0057; Mini-Batch #68
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.997; Loss = 0.0056; Mini-Batch #69
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.997; Loss = 0.0056; Mini-Batch #70
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.997; Loss = 0.0057; Mini-Batch #71
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.997; Loss = 0.0056; Mini-Batch #72
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.997; Loss = 0.0056; Mini-Batch #73
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.997; Loss = 0.0056; Mini-Batch #74
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.997; Loss = 0.0056; Mini-Batch #75
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.997; Loss = 0.0056; Mini-Batch #76
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.997; Loss = 0.0055; Mini-Batch #77
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.997; Loss = 0.0057; Mini-Batch #78
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.997; Loss = 0.0057; Mini-Batch #79
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.997; Loss = 0.0056; Mini-Batch #80
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.997; Loss = 0.0057; Mini-Batch #81
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.997; Loss = 0.0057; Mini-Batch #82
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.997; Loss = 0.0056; Mini-Batch #83
+Validation Batch #2: Accuracy = 0.998; Recall = 0.995; Precision = 0.997; Loss = 0.0057; Mini-Batch #84
+Validation Batch #2: Accuracy = 0.998; Recall = 0.995; Precision = 0.997; Loss = 0.0056; Mini-Batch #85
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.997; Loss = 0.0056; Mini-Batch #86
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.997; Loss = 0.0056; Mini-Batch #87
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.997; Loss = 0.0055; Mini-Batch #88
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.997; Loss = 0.0055; Mini-Batch #89
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.997; Loss = 0.0055; Mini-Batch #90
+Validation Batch #2: Accuracy = 0.998; Recall = 0.995; Precision = 0.997; Loss = 0.0056; Mini-Batch #91
+Validation Batch #2: Accuracy = 0.998; Recall = 0.995; Precision = 0.997; Loss = 0.0056; Mini-Batch #92
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.997; Loss = 0.0056; Mini-Batch #93
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.997; Loss = 0.0056; Mini-Batch #94
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.997; Loss = 0.0056; Mini-Batch #95
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.997; Loss = 0.0055; Mini-Batch #96
+Validation Batch #2: Accuracy = 0.998; Recall = 0.995; Precision = 0.996; Loss = 0.0059; Mini-Batch #97
+Validation Batch #2: Accuracy = 0.998; Recall = 0.995; Precision = 0.996; Loss = 0.0058; Mini-Batch #98
+Validation Batch #2: Accuracy = 0.998; Recall = 0.995; Precision = 0.996; Loss = 0.0058; Mini-Batch #99
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.996; Loss = 0.0058; Mini-Batch #100
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.997; Loss = 0.0057; Mini-Batch #101
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.997; Loss = 0.0058; Mini-Batch #102
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.997; Loss = 0.0057; Mini-Batch #103
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.996; Loss = 0.0057; Mini-Batch #104
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.996; Loss = 0.0057; Mini-Batch #105
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.996; Loss = 0.0057; Mini-Batch #106
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.996; Loss = 0.0057; Mini-Batch #107
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.996; Loss = 0.0057; Mini-Batch #108
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.996; Loss = 0.0057; Mini-Batch #109
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.997; Loss = 0.0057; Mini-Batch #110
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.997; Loss = 0.0057; Mini-Batch #111
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.997; Loss = 0.0056; Mini-Batch #112
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.996; Loss = 0.0057; Mini-Batch #113
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.996; Loss = 0.0056; Mini-Batch #114
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.996; Loss = 0.0056; Mini-Batch #115
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.996; Loss = 0.0057; Mini-Batch #116
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.996; Loss = 0.0056; Mini-Batch #117
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.996; Loss = 0.0056; Mini-Batch #118
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.996; Loss = 0.0056; Mini-Batch #119
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.996; Loss = 0.0055; Mini-Batch #120
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.996; Loss = 0.0055; Mini-Batch #121
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.996; Loss = 0.0055; Mini-Batch #122
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.996; Loss = 0.0055; Mini-Batch #123
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.996; Loss = 0.0054; Mini-Batch #124
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.996; Loss = 0.0054; Mini-Batch #125
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.996; Loss = 0.0054; Mini-Batch #126
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.996; Loss = 0.0054; Mini-Batch #127
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.997; Loss = 0.0054; Mini-Batch #128
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.996; Loss = 0.0054; Mini-Batch #129
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.996; Loss = 0.0053; Mini-Batch #130
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.996; Loss = 0.0053; Mini-Batch #131
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.996; Loss = 0.0053; Mini-Batch #132
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.996; Loss = 0.0053; Mini-Batch #133
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.996; Loss = 0.0053; Mini-Batch #134
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.996; Loss = 0.0052; Mini-Batch #135
+Validation Batch #2: Accuracy = 0.998; Recall = 0.996; Precision = 0.996; Loss = 0.0052; Mini-Batch #136
+Validation Batch #2: Accuracy = 0.998; Recall = 0.997; Precision = 0.997; Loss = 0.0052; Mini-Batch #137
+Validation Batch #2: Accuracy = 0.998; Recall = 0.997; Precision = 0.997; Loss = 0.0051; Mini-Batch #138
+Validation Batch #2: Accuracy = 0.998; Recall = 0.997; Precision = 0.997; Loss = 0.0051; Mini-Batch #139
+Validation Batch #2: Accuracy = 0.998; Recall = 0.997; Precision = 0.997; Loss = 0.0051; Mini-Batch #140
+Validation Batch #2: Accuracy = 0.998; Recall = 0.997; Precision = 0.997; Loss = 0.0051; Mini-Batch #141
+Validation Batch #2: Accuracy = 0.998; Recall = 0.997; Precision = 0.997; Loss = 0.0050; Mini-Batch #142
+Validation Batch #2: Accuracy = 0.998; Recall = 0.997; Precision = 0.997; Loss = 0.0050; Mini-Batch #143
+Validation Batch #2: Accuracy = 0.998; Recall = 0.997; Precision = 0.997; Loss = 0.0050; Mini-Batch #144
+Validation Batch #2: Accuracy = 0.998; Recall = 0.997; Precision = 0.997; Loss = 0.0050; Mini-Batch #145
+Validation Batch #2: Accuracy = 0.998; Recall = 0.997; Precision = 0.997; Loss = 0.0049; Mini-Batch #146
+Validation Batch #2: Accuracy = 0.998; Recall = 0.997; Precision = 0.997; Loss = 0.0049; Mini-Batch #147
+Validation Batch #2: Accuracy = 0.998; Recall = 0.997; Precision = 0.997; Loss = 0.0049; Mini-Batch #148
+Validation Batch #2: Accuracy = 0.998; Recall = 0.997; Precision = 0.997; Loss = 0.0050; Mini-Batch #149
+Validation Batch #2: Accuracy = 0.998; Recall = 0.997; Precision = 0.997; Loss = 0.0050; Mini-Batch #150
+Validation Batch #2: Accuracy = 0.998; Recall = 0.997; Precision = 0.997; Loss = 0.0050; Mini-Batch #151
+Validation Batch #2: Accuracy = 0.998; Recall = 0.997; Precision = 0.997; Loss = 0.0049; Mini-Batch #152
+Validation Batch #2: Accuracy = 0.998; Recall = 0.997; Precision = 0.997; Loss = 0.0049; Mini-Batch #153
+Validation Batch #2: Accuracy = 0.998; Recall = 0.997; Precision = 0.997; Loss = 0.0053; Mini-Batch #154
+Validation Batch #2: Accuracy = 0.998; Recall = 0.997; Precision = 0.997; Loss = 0.0052; Mini-Batch #155
+Validation Batch #2: Accuracy = 0.998; Recall = 0.997; Precision = 0.997; Loss = 0.0052; Mini-Batch #156
+Validation Batch #2: Accuracy = 0.998; Recall = 0.997; Precision = 0.997; Loss = 0.0052; Mini-Batch #157
+Validation Batch #2: Accuracy = 0.998; Recall = 0.997; Precision = 0.997; Loss = 0.0052; Mini-Batch #158
+Validation Batch #2: Accuracy = 0.998; Recall = 0.997; Precision = 0.997; Loss = 0.0052; Mini-Batch #159
+Validation Batch #2: Accuracy = 0.998; Recall = 0.997; Precision = 0.997; Loss = 0.0051; Mini-Batch #160
+Validation Batch #2: Accuracy = 0.998; Recall = 0.997; Precision = 0.997; Loss = 0.0051; Mini-Batch #161
+Validation Batch #2: Accuracy = 0.998; Recall = 0.997; Precision = 0.997; Loss = 0.0052; Mini-Batch #162
+Validation Batch #2: Accuracy = 0.998; Recall = 0.997; Precision = 0.997; Loss = 0.0051; Mini-Batch #163
+Validation Batch #2: Accuracy = 0.998; Recall = 0.997; Precision = 0.997; Loss = 0.0051; Mini-Batch #164
+Validation Batch #2: Accuracy = 0.998; Recall = 0.997; Precision = 0.997; Loss = 0.0051; Mini-Batch #165
+Validation Batch #2: Accuracy = 0.998; Recall = 0.997; Precision = 0.997; Loss = 0.0051; Mini-Batch #166
+Validation Batch #2: Accuracy = 0.998; Recall = 0.997; Precision = 0.997; Loss = 0.0050; Mini-Batch #167
+Validation Batch #2: Accuracy = 0.998; Recall = 0.997; Precision = 0.997; Loss = 0.0050; Mini-Batch #168
+Validation Batch #2: Accuracy = 0.998; Recall = 0.997; Precision = 0.997; Loss = 0.0050; Mini-Batch #169
+Validation Batch #2: Accuracy = 0.998; Recall = 0.997; Precision = 0.997; Loss = 0.0050; Mini-Batch #170
+Validation Batch #2: Accuracy = 0.998; Recall = 0.997; Precision = 0.997; Loss = 0.0050; Mini-Batch #171
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0050; Mini-Batch #172
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0049; Mini-Batch #173
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0049; Mini-Batch #174
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0049; Mini-Batch #175
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0049; Mini-Batch #176
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0049; Mini-Batch #177
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0049; Mini-Batch #178
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0049; Mini-Batch #179
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0049; Mini-Batch #180
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0048; Mini-Batch #181
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0048; Mini-Batch #182
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0048; Mini-Batch #183
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0048; Mini-Batch #184
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0047; Mini-Batch #185
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0049; Mini-Batch #186
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0049; Mini-Batch #187
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0049; Mini-Batch #188
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0048; Mini-Batch #189
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0048; Mini-Batch #190
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0048; Mini-Batch #191
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0048; Mini-Batch #192
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0048; Mini-Batch #193
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0048; Mini-Batch #194
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0048; Mini-Batch #195
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0048; Mini-Batch #196
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0047; Mini-Batch #197
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0047; Mini-Batch #198
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0047; Mini-Batch #199
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0047; Mini-Batch #200
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0047; Mini-Batch #201
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0047; Mini-Batch #202
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0047; Mini-Batch #203
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0047; Mini-Batch #204
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0047; Mini-Batch #205
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0047; Mini-Batch #206
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0047; Mini-Batch #207
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0046; Mini-Batch #208
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0046; Mini-Batch #209
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0046; Mini-Batch #210
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0047; Mini-Batch #211
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0046; Mini-Batch #212
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0046; Mini-Batch #213
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0046; Mini-Batch #214
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0046; Mini-Batch #215
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0046; Mini-Batch #216
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0046; Mini-Batch #217
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0046; Mini-Batch #218
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0046; Mini-Batch #219
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0046; Mini-Batch #220
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0046; Mini-Batch #221
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0046; Mini-Batch #222
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0046; Mini-Batch #223
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0045; Mini-Batch #224
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0045; Mini-Batch #225
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0046; Mini-Batch #226
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0046; Mini-Batch #227
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0046; Mini-Batch #228
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0046; Mini-Batch #229
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0046; Mini-Batch #230
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0046; Mini-Batch #231
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0047; Mini-Batch #232
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0047; Mini-Batch #233
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0047; Mini-Batch #234
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0047; Mini-Batch #235
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0048; Mini-Batch #236
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0048; Mini-Batch #237
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0048; Mini-Batch #238
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0050; Mini-Batch #239
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0049; Mini-Batch #240
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0049; Mini-Batch #241
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0049; Mini-Batch #242
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0049; Mini-Batch #243
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0049; Mini-Batch #244
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0049; Mini-Batch #245
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0049; Mini-Batch #246
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0048; Mini-Batch #247
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0049; Mini-Batch #248
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0049; Mini-Batch #249
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0049; Mini-Batch #250
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0049; Mini-Batch #251
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0049; Mini-Batch #252
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0049; Mini-Batch #253
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0049; Mini-Batch #254
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0049; Mini-Batch #255
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0049; Mini-Batch #256
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0049; Mini-Batch #257
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0048; Mini-Batch #258
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0048; Mini-Batch #259
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0048; Mini-Batch #260
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0048; Mini-Batch #261
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0048; Mini-Batch #262
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0048; Mini-Batch #263
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0048; Mini-Batch #264
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0048; Mini-Batch #265
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0048; Mini-Batch #266
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0048; Mini-Batch #267
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0047; Mini-Batch #268
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0048; Mini-Batch #269
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0047; Mini-Batch #270
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0047; Mini-Batch #271
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0048; Mini-Batch #272
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0048; Mini-Batch #273
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0047; Mini-Batch #274
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0047; Mini-Batch #275
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0047; Mini-Batch #276
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0047; Mini-Batch #277
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0047; Mini-Batch #278
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0047; Mini-Batch #279
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0047; Mini-Batch #280
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0047; Mini-Batch #281
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0048; Mini-Batch #282
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0048; Mini-Batch #283
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0048; Mini-Batch #284
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0048; Mini-Batch #285
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0048; Mini-Batch #286
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0048; Mini-Batch #287
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0048; Mini-Batch #288
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0048; Mini-Batch #289
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0048; Mini-Batch #290
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0047; Mini-Batch #291
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0048; Mini-Batch #292
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0048; Mini-Batch #293
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0048; Mini-Batch #294
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0048; Mini-Batch #295
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0048; Mini-Batch #296
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0048; Mini-Batch #297
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0048; Mini-Batch #298
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0049; Mini-Batch #299
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0049; Mini-Batch #300
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0049; Mini-Batch #301
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0049; Mini-Batch #302
+Validation Batch #2: Accuracy = 0.999; Recall = 0.997; Precision = 0.997; Loss = 0.0049; Mini-Batch #303
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0049; Mini-Batch #304
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0048; Mini-Batch #305
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0048; Mini-Batch #306
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0048; Mini-Batch #307
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0048; Mini-Batch #308
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0048; Mini-Batch #309
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0048; Mini-Batch #310
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0048; Mini-Batch #311
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0048; Mini-Batch #312
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0048; Mini-Batch #313
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0048; Mini-Batch #314
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0048; Mini-Batch #315
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0047; Mini-Batch #316
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0047; Mini-Batch #317
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0047; Mini-Batch #318
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0047; Mini-Batch #319
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0047; Mini-Batch #320
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0047; Mini-Batch #321
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0047; Mini-Batch #322
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0047; Mini-Batch #323
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0047; Mini-Batch #324
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0047; Mini-Batch #325
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0047; Mini-Batch #326
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0046; Mini-Batch #327
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0046; Mini-Batch #328
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0046; Mini-Batch #329
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0046; Mini-Batch #330
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0046; Mini-Batch #331
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0046; Mini-Batch #332
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0046; Mini-Batch #333
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0046; Mini-Batch #334
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0046; Mini-Batch #335
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0046; Mini-Batch #336
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0045; Mini-Batch #337
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0045; Mini-Batch #338
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0045; Mini-Batch #339
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0045; Mini-Batch #340
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0045; Mini-Batch #341
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0046; Mini-Batch #342
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0046; Mini-Batch #343
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0045; Mini-Batch #344
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0045; Mini-Batch #345
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0045; Mini-Batch #346
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0045; Mini-Batch #347
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0045; Mini-Batch #348
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0045; Mini-Batch #349
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0045; Mini-Batch #350
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0045; Mini-Batch #351
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0045; Mini-Batch #352
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0045; Mini-Batch #353
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0045; Mini-Batch #354
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0045; Mini-Batch #355
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #356
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #357
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #358
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #359
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #360
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #361
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #362
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #363
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #364
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #365
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #366
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #367
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #368
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #369
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #370
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #371
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #372
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #373
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0043; Mini-Batch #374
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0043; Mini-Batch #375
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #376
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #377
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #378
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #379
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #380
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #381
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #382
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #383
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #384
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #385
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #386
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #387
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #388
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #389
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #390
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #391
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #392
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #393
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #394
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #395
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #396
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0043; Mini-Batch #397
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0043; Mini-Batch #398
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0043; Mini-Batch #399
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0043; Mini-Batch #400
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0043; Mini-Batch #401
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0043; Mini-Batch #402
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #403
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #404
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #405
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #406
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #407
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #408
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0043; Mini-Batch #409
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0043; Mini-Batch #410
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0043; Mini-Batch #411
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #412
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #413
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #414
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #415
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #416
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #417
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #418
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #419
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #420
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0043; Mini-Batch #421
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #422
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #423
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #424
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #425
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #426
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #427
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #428
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #429
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #430
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #431
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #432
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #433
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #434
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0043; Mini-Batch #435
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0043; Mini-Batch #436
+INFO:absl:Step #1000: rate 0.001000, accuracy 99.88%, recall 99.77%, precision 99.72%, cross entropy 0.004555
+INFO:absl:Step 1000 (nonstreaming): Validation: recall at no faph = 0.000 with cutoff 1.00, accuracy = 100.00%, recall = 100.00%, precision = 100.00%, ambient false positives = 1230, estimated false positives per hour = 127.19127, loss = 0.03037, auc = 0.99964, average viable recall = 0.079266183
+INFO:absl:So far the best minimization quantity is 15.511 with best maximization quantity of 81.36654%; no faph cutoff is 0.99
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0043; Mini-Batch #437
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0043; Mini-Batch #438
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0043; Mini-Batch #439
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0043; Mini-Batch #440
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0043; Mini-Batch #441
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0043; Mini-Batch #442
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0043; Mini-Batch #443
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0043; Mini-Batch #444
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0043; Mini-Batch #445
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0043; Mini-Batch #446
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0043; Mini-Batch #447
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0043; Mini-Batch #448
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0043; Mini-Batch #449
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0043; Mini-Batch #450
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0043; Mini-Batch #451
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0043; Mini-Batch #452
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0043; Mini-Batch #453
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0043; Mini-Batch #454
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0043; Mini-Batch #455
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0043; Mini-Batch #456
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0043; Mini-Batch #457
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0043; Mini-Batch #458
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0043; Mini-Batch #459
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0043; Mini-Batch #460
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0043; Mini-Batch #461
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0043; Mini-Batch #462
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0043; Mini-Batch #463
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0043; Mini-Batch #464
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0043; Mini-Batch #465
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0043; Mini-Batch #466
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #467
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #468
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #469
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #470
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #471
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #472
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #473
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #474
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #475
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #476
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #477
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #478
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0045; Mini-Batch #479
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0045; Mini-Batch #480
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0045; Mini-Batch #481
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0045; Mini-Batch #482
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0045; Mini-Batch #483
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0045; Mini-Batch #484
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0045; Mini-Batch #485
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0045; Mini-Batch #486
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0045; Mini-Batch #487
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0046; Mini-Batch #488
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0046; Mini-Batch #489
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0046; Mini-Batch #490
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0046; Mini-Batch #491
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0046; Mini-Batch #492
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0046; Mini-Batch #493
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0046; Mini-Batch #494
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0046; Mini-Batch #495
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0046; Mini-Batch #496
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0046; Mini-Batch #497
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0046; Mini-Batch #498
+Validation Batch #2: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0046; Mini-Batch #499
+Validation Batch #3: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0046; Mini-Batch #0
+Validation Batch #3: Accuracy = 1.000; Recall = 1.000; Precision = 1.000; Loss = 0.0008; Mini-Batch #1
+Validation Batch #3: Accuracy = 1.000; Recall = 1.000; Precision = 1.000; Loss = 0.0006; Mini-Batch #2
+Validation Batch #3: Accuracy = 1.000; Recall = 1.000; Precision = 1.000; Loss = 0.0005; Mini-Batch #3
+Validation Batch #3: Accuracy = 1.000; Recall = 1.000; Precision = 1.000; Loss = 0.0005; Mini-Batch #4
+Validation Batch #3: Accuracy = 1.000; Recall = 1.000; Precision = 1.000; Loss = 0.0009; Mini-Batch #5
+Validation Batch #3: Accuracy = 1.000; Recall = 1.000; Precision = 1.000; Loss = 0.0020; Mini-Batch #6
+Validation Batch #3: Accuracy = 0.999; Recall = 1.000; Precision = 0.995; Loss = 0.0047; Mini-Batch #7
+Validation Batch #3: Accuracy = 0.998; Recall = 1.000; Precision = 0.991; Loss = 0.0078; Mini-Batch #8
+Validation Batch #3: Accuracy = 0.998; Recall = 1.000; Precision = 0.992; Loss = 0.0070; Mini-Batch #9
+Validation Batch #3: Accuracy = 0.998; Recall = 1.000; Precision = 0.993; Loss = 0.0068; Mini-Batch #10
+Validation Batch #3: Accuracy = 0.999; Recall = 1.000; Precision = 0.994; Loss = 0.0062; Mini-Batch #11
+Validation Batch #3: Accuracy = 0.999; Recall = 1.000; Precision = 0.994; Loss = 0.0061; Mini-Batch #12
+Validation Batch #3: Accuracy = 0.999; Recall = 1.000; Precision = 0.995; Loss = 0.0057; Mini-Batch #13
+Validation Batch #3: Accuracy = 0.998; Recall = 1.000; Precision = 0.993; Loss = 0.0059; Mini-Batch #14
+Validation Batch #3: Accuracy = 0.998; Recall = 1.000; Precision = 0.993; Loss = 0.0059; Mini-Batch #15
+Validation Batch #3: Accuracy = 0.999; Recall = 1.000; Precision = 0.994; Loss = 0.0056; Mini-Batch #16
+Validation Batch #3: Accuracy = 0.998; Recall = 0.998; Precision = 0.994; Loss = 0.0060; Mini-Batch #17
+Validation Batch #3: Accuracy = 0.998; Recall = 0.998; Precision = 0.994; Loss = 0.0058; Mini-Batch #18
+Validation Batch #3: Accuracy = 0.998; Recall = 0.998; Precision = 0.995; Loss = 0.0055; Mini-Batch #19
+Validation Batch #3: Accuracy = 0.998; Recall = 0.998; Precision = 0.995; Loss = 0.0053; Mini-Batch #20
+Validation Batch #3: Accuracy = 0.999; Recall = 0.998; Precision = 0.995; Loss = 0.0051; Mini-Batch #21
+Validation Batch #3: Accuracy = 0.999; Recall = 0.998; Precision = 0.995; Loss = 0.0049; Mini-Batch #22
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.996; Loss = 0.0047; Mini-Batch #23
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.996; Loss = 0.0046; Mini-Batch #24
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.996; Loss = 0.0044; Mini-Batch #25
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.996; Loss = 0.0044; Mini-Batch #26
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.996; Loss = 0.0043; Mini-Batch #27
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.996; Loss = 0.0041; Mini-Batch #28
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0040; Mini-Batch #29
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0039; Mini-Batch #30
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0038; Mini-Batch #31
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0037; Mini-Batch #32
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0036; Mini-Batch #33
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0035; Mini-Batch #34
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0034; Mini-Batch #35
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0033; Mini-Batch #36
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0033; Mini-Batch #37
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0037; Mini-Batch #38
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.996; Loss = 0.0047; Mini-Batch #39
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.996; Loss = 0.0045; Mini-Batch #40
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.996; Loss = 0.0044; Mini-Batch #41
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.996; Loss = 0.0044; Mini-Batch #42
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.995; Loss = 0.0050; Mini-Batch #43
+Validation Batch #3: Accuracy = 0.999; Recall = 0.998; Precision = 0.995; Loss = 0.0053; Mini-Batch #44
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.996; Loss = 0.0052; Mini-Batch #45
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.996; Loss = 0.0051; Mini-Batch #46
+Validation Batch #3: Accuracy = 0.999; Recall = 0.998; Precision = 0.996; Loss = 0.0053; Mini-Batch #47
+Validation Batch #3: Accuracy = 0.999; Recall = 0.998; Precision = 0.996; Loss = 0.0052; Mini-Batch #48
+Validation Batch #3: Accuracy = 0.999; Recall = 0.998; Precision = 0.996; Loss = 0.0051; Mini-Batch #49
+Validation Batch #3: Accuracy = 0.999; Recall = 0.998; Precision = 0.996; Loss = 0.0050; Mini-Batch #50
+Validation Batch #3: Accuracy = 0.999; Recall = 0.998; Precision = 0.996; Loss = 0.0049; Mini-Batch #51
+Validation Batch #3: Accuracy = 0.999; Recall = 0.998; Precision = 0.996; Loss = 0.0049; Mini-Batch #52
+Validation Batch #3: Accuracy = 0.999; Recall = 0.998; Precision = 0.996; Loss = 0.0048; Mini-Batch #53
+Validation Batch #3: Accuracy = 0.999; Recall = 0.998; Precision = 0.996; Loss = 0.0047; Mini-Batch #54
+Validation Batch #3: Accuracy = 0.999; Recall = 0.998; Precision = 0.996; Loss = 0.0047; Mini-Batch #55
+Validation Batch #3: Accuracy = 0.999; Recall = 0.998; Precision = 0.996; Loss = 0.0047; Mini-Batch #56
+Validation Batch #3: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0048; Mini-Batch #57
+Validation Batch #3: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0047; Mini-Batch #58
+Validation Batch #3: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0046; Mini-Batch #59
+Validation Batch #3: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0046; Mini-Batch #60
+Validation Batch #3: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0045; Mini-Batch #61
+Validation Batch #3: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #62
+Validation Batch #3: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #63
+Validation Batch #3: Accuracy = 0.999; Recall = 0.998; Precision = 0.997; Loss = 0.0044; Mini-Batch #64
+Validation Batch #3: Accuracy = 0.999; Recall = 0.998; Precision = 0.996; Loss = 0.0047; Mini-Batch #65
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.996; Loss = 0.0048; Mini-Batch #66
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.996; Loss = 0.0047; Mini-Batch #67
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.996; Loss = 0.0046; Mini-Batch #68
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.996; Loss = 0.0046; Mini-Batch #69
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.996; Loss = 0.0045; Mini-Batch #70
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.996; Loss = 0.0045; Mini-Batch #71
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.996; Loss = 0.0045; Mini-Batch #72
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.996; Loss = 0.0045; Mini-Batch #73
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.996; Loss = 0.0044; Mini-Batch #74
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.996; Loss = 0.0044; Mini-Batch #75
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0043; Mini-Batch #76
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0043; Mini-Batch #77
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0043; Mini-Batch #78
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0042; Mini-Batch #79
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0042; Mini-Batch #80
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0042; Mini-Batch #81
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0042; Mini-Batch #82
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0041; Mini-Batch #83
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0041; Mini-Batch #84
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0040; Mini-Batch #85
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0040; Mini-Batch #86
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0041; Mini-Batch #87
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0041; Mini-Batch #88
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0040; Mini-Batch #89
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0041; Mini-Batch #90
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0041; Mini-Batch #91
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0041; Mini-Batch #92
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0040; Mini-Batch #93
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0040; Mini-Batch #94
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0040; Mini-Batch #95
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0040; Mini-Batch #96
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0040; Mini-Batch #97
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0040; Mini-Batch #98
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0039; Mini-Batch #99
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0039; Mini-Batch #100
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0039; Mini-Batch #101
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0038; Mini-Batch #102
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0038; Mini-Batch #103
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0038; Mini-Batch #104
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0037; Mini-Batch #105
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0037; Mini-Batch #106
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0037; Mini-Batch #107
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0037; Mini-Batch #108
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0037; Mini-Batch #109
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0036; Mini-Batch #110
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0036; Mini-Batch #111
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0036; Mini-Batch #112
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0036; Mini-Batch #113
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0036; Mini-Batch #114
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0035; Mini-Batch #115
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0038; Mini-Batch #116
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0037; Mini-Batch #117
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0037; Mini-Batch #118
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0037; Mini-Batch #119
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0037; Mini-Batch #120
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0037; Mini-Batch #121
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0036; Mini-Batch #122
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0036; Mini-Batch #123
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0036; Mini-Batch #124
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0036; Mini-Batch #125
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0035; Mini-Batch #126
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0035; Mini-Batch #127
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0038; Mini-Batch #128
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0037; Mini-Batch #129
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0037; Mini-Batch #130
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0037; Mini-Batch #131
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0037; Mini-Batch #132
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0037; Mini-Batch #133
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0037; Mini-Batch #134
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0036; Mini-Batch #135
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0036; Mini-Batch #136
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0036; Mini-Batch #137
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0036; Mini-Batch #138
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0036; Mini-Batch #139
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0036; Mini-Batch #140
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0035; Mini-Batch #141
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0036; Mini-Batch #142
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0036; Mini-Batch #143
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0036; Mini-Batch #144
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0036; Mini-Batch #145
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0036; Mini-Batch #146
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0036; Mini-Batch #147
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0036; Mini-Batch #148
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0037; Mini-Batch #149
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0037; Mini-Batch #150
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0036; Mini-Batch #151
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0036; Mini-Batch #152
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0036; Mini-Batch #153
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0036; Mini-Batch #154
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0036; Mini-Batch #155
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0036; Mini-Batch #156
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0036; Mini-Batch #157
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0036; Mini-Batch #158
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0036; Mini-Batch #159
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0035; Mini-Batch #160
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0035; Mini-Batch #161
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0035; Mini-Batch #162
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0035; Mini-Batch #163
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0035; Mini-Batch #164
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0035; Mini-Batch #165
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0034; Mini-Batch #166
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0034; Mini-Batch #167
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0035; Mini-Batch #168
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0034; Mini-Batch #169
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0034; Mini-Batch #170
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0034; Mini-Batch #171
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0034; Mini-Batch #172
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0034; Mini-Batch #173
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0034; Mini-Batch #174
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0034; Mini-Batch #175
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0033; Mini-Batch #176
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0033; Mini-Batch #177
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0033; Mini-Batch #178
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0033; Mini-Batch #179
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0033; Mini-Batch #180
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0032; Mini-Batch #181
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.997; Loss = 0.0032; Mini-Batch #182
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0032; Mini-Batch #183
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0032; Mini-Batch #184
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0032; Mini-Batch #185
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0032; Mini-Batch #186
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0032; Mini-Batch #187
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0032; Mini-Batch #188
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0031; Mini-Batch #189
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0032; Mini-Batch #190
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0032; Mini-Batch #191
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0032; Mini-Batch #192
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0032; Mini-Batch #193
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0032; Mini-Batch #194
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0032; Mini-Batch #195
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0032; Mini-Batch #196
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0031; Mini-Batch #197
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0031; Mini-Batch #198
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0031; Mini-Batch #199
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0031; Mini-Batch #200
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0031; Mini-Batch #201
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0031; Mini-Batch #202
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0031; Mini-Batch #203
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0030; Mini-Batch #204
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0030; Mini-Batch #205
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0030; Mini-Batch #206
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0030; Mini-Batch #207
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0030; Mini-Batch #208
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0030; Mini-Batch #209
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0030; Mini-Batch #210
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0030; Mini-Batch #211
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0030; Mini-Batch #212
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0030; Mini-Batch #213
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0029; Mini-Batch #214
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0029; Mini-Batch #215
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0029; Mini-Batch #216
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0029; Mini-Batch #217
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0029; Mini-Batch #218
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0029; Mini-Batch #219
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0029; Mini-Batch #220
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0029; Mini-Batch #221
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0029; Mini-Batch #222
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0029; Mini-Batch #223
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0029; Mini-Batch #224
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0029; Mini-Batch #225
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0029; Mini-Batch #226
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0029; Mini-Batch #227
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0029; Mini-Batch #228
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0029; Mini-Batch #229
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0029; Mini-Batch #230
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0029; Mini-Batch #231
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0029; Mini-Batch #232
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0029; Mini-Batch #233
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0029; Mini-Batch #234
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0029; Mini-Batch #235
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0028; Mini-Batch #236
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0028; Mini-Batch #237
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0028; Mini-Batch #238
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0028; Mini-Batch #239
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0028; Mini-Batch #240
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0029; Mini-Batch #241
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0028; Mini-Batch #242
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0028; Mini-Batch #243
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0028; Mini-Batch #244
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0028; Mini-Batch #245
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0028; Mini-Batch #246
+Validation Batch #3: Accuracy = 0.999; Recall = 0.999; Precision = 0.998; Loss = 0.0028; Mini-Batch #247

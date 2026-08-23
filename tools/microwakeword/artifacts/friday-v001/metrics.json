@@ -1,0 +1,25 @@
+{
+  "dataset_manifest_sha256": "7acbe017f506f7a5c836d5e1787e1b47308ee4b5ff170b820ccc3372d010bbea",
+  "experiment_id": "friday-v001",
+  "feature_root": "/home/maheshk/.cache/friday-microwakeword/features",
+  "git_commit": "86fc1426109bae0218755de517f02c90da1695e9",
+  "real_positive_count": 150,
+  "real_positive_duration_seconds": 375.0,
+  "invalid_reason": "Command tails in context recordings were mislabeled as positive wake windows; checkpoint 1000 regressed to 127.19127 ambient false accepts/hour.",
+  "observed_checkpoints": {
+    "500": {
+      "ambient_false_positives_per_hour": 15.51113,
+      "average_viable_recall": 0.813665373,
+      "recall_at_zero_false_accepts": 0.636
+    },
+    "1000": {
+      "ambient_false_positives_per_hour": 127.19127,
+      "average_viable_recall": 0.079266183,
+      "recall_at_zero_false_accepts": 0.0
+    }
+  },
+  "started_at": "2026-08-23T21:00:12.961011+00:00",
+  "status": "invalid",
+  "training_config_sha256": "f305bc06ea8e4ae27fa42ef80d7fa7c1690aa634bf3ab2bede9973f2898b7df1",
+  "upstream_commit": "4665173cd35f1cff9a61e06fc427f124766c488e"
+}

@@ -23,7 +23,10 @@ def main() -> int:
         raise SystemExit(f"error: no Piper WAV files under {source}")
     clips = Clips(
         input_directory=str(source),
-        file_pattern="**/*.wav",
+        # Only wake-only phrases are positive training labels. Longer command
+        # examples remain waveform benchmarks; labeling their tail positive
+        # teaches the model to wake on ordinary command words.
+        file_pattern="phrase-0[0-2]/*.wav",
         remove_silence=True,
     )
     augmenter = Augmentation(

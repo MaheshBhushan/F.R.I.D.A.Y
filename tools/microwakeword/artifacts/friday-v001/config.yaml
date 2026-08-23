@@ -1,0 +1,53 @@
+window_step_ms: 10
+train_dir: tools/microwakeword/artifacts/friday-v001/work
+features:
+  - features_dir: tools/microwakeword/datasets/features/user_positives
+    sampling_weight: 4.0
+    penalty_weight: 1.0
+    truth: true
+    truncation_strategy: truncate_start
+    type: mmap
+  - features_dir: tools/microwakeword/datasets/features/synthetic_positives
+    sampling_weight: 4.0
+    penalty_weight: 1.0
+    truth: true
+    truncation_strategy: truncate_start
+    type: mmap
+  - features_dir: tools/microwakeword/datasets/features/upstream/speech
+    sampling_weight: 10.0
+    penalty_weight: 1.0
+    truth: false
+    truncation_strategy: random
+    type: mmap
+  - features_dir: tools/microwakeword/datasets/features/upstream/dinner_party
+    sampling_weight: 10.0
+    penalty_weight: 1.0
+    truth: false
+    truncation_strategy: random
+    type: mmap
+  - features_dir: tools/microwakeword/datasets/features/upstream/no_speech
+    sampling_weight: 5.0
+    penalty_weight: 1.0
+    truth: false
+    truncation_strategy: random
+    type: mmap
+  - features_dir: tools/microwakeword/datasets/features/upstream/dinner_party_eval
+    sampling_weight: 0.0
+    penalty_weight: 1.0
+    truth: false
+    truncation_strategy: split
+    type: mmap
+training_steps: [10000]
+positive_class_weight: [1]
+negative_class_weight: [20]
+learning_rates: [0.001]
+batch_size: 128
+time_mask_max_size: [0]
+time_mask_count: [0]
+freq_mask_max_size: [0]
+freq_mask_count: [0]
+eval_step_interval: 500
+clip_duration_ms: 1500
+target_minimization: 0.1
+minimization_metric: ambient_false_positives_per_hour
+maximization_metric: average_viable_recall
