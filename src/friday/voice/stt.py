@@ -255,7 +255,10 @@ async def run_utterance(
         try:
             async for event in transport:
                 await out_queue.put(event)
-                if event.is_final or event.speech_final or event.utterance_end:
+                # `is_final` only finalizes one transcript segment; it is not
+                # an end-of-turn signal. Deepgram may emit an empty/final wake
+                # segment before the command that follows it.
+                if event.speech_final or event.utterance_end:
                     got_final.set()
                     return
         except asyncio.CancelledError:

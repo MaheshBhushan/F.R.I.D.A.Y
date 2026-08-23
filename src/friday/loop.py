@@ -430,7 +430,7 @@ class VoiceLoop:
         """Drain one utterance into a final transcript, prewarming on interims."""
         if self._stt_factory is None:
             return ""
-        final = ""
+        final_parts: list[str] = []
         best_interim = ""
         self._set_audio_state(AudioTurnState.STT_CONNECTING, turn=span.turn_id)
         span.mark("stt_connect_started")
@@ -444,7 +444,8 @@ class VoiceLoop:
                     if event.text.strip() and "speech_started" not in span.stages:
                         span.mark("speech_started")
                     if event.is_final:
-                        final = event.text
+                        if event.text.strip():
+                            final_parts.append(event.text.strip())
                         events.emit("stt-final", events.quote(event.text),
                                     turn=span.turn_id,
                                     speech_final=event.speech_final,
@@ -466,7 +467,7 @@ class VoiceLoop:
         # final for a short or pause-heavy utterance -- observed live, with a
         # complete interim transcript and no final at all. Requiring is_final
         # would drop the turn silently: heard, understood, ignored.
-        return final or best_interim
+        return " ".join(final_parts) or best_interim
 
     async def _follow_up_window(self) -> None:
         """Listen for wake-free turns until the active conversation expires."""

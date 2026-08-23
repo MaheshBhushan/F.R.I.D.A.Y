@@ -239,6 +239,24 @@ async def _max_wait_cap_closes_turn(tmp_path):
     assert 650 <= elapsed_since_vad_ms <= 900  # cap fired, with scheduling slack
 
 
+def test_segment_final_does_not_end_the_turn_before_speech_final():
+    """An empty finalized wake segment must not cut off the following command."""
+
+    async def scenario():
+        chunks = _wav_chunks(TEST_WAV) + _silence_chunks(10)
+        detection = _make_detection(chunks)
+        transport = FakeTransport([
+            (0.0, TranscriptEvent(text="", is_final=True)),
+            (0.05, TranscriptEvent(
+                text="are you working", is_final=True, speech_final=True
+            )),
+        ])
+        return [event async for event in run_utterance(detection, transport)]
+
+    seen = asyncio.run(scenario())
+    assert [event.text for event in seen] == ["", "are you working"]
+
+
 # ---------------------------------------------------------------------------
 # Criterion 6: missing DEEPGRAM_API_KEY exits non-zero with a clear message.
 # ---------------------------------------------------------------------------
