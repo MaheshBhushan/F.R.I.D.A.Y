@@ -1,0 +1,20 @@
+{
+  "target": "hey_friday",
+  "best_step": 6000,
+  "selection": "most recall within 0.5 false accepts/hr",
+  "max_false_accepts_per_hour": 0.5,
+  "recall_at_threshold": 0.896,
+  "false_accepts_per_hour": 0.187,
+  "threshold": 0.5,
+  "validation_hours": 10.7,
+  "positives_train": 10000,
+  "adversarial": 9800,
+  "negative_pool": 400000,
+  "layer_dim": 128,
+  "blocks": 1,
+  "input_shape": [
+    1,
+    16,
+    96
+  ]
+}
