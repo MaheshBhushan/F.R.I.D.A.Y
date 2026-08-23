@@ -23,6 +23,7 @@ training/*.log
 # licensed datasets. Keep manifests/config/results; never commit raw corpora,
 # generated features, local recordings, or virtual environments.
 tools/microwakeword/.venv/
+tools/microwakeword/vendor/
 tools/microwakeword/datasets/raw/
 tools/microwakeword/datasets/features/
 tools/microwakeword/datasets/generated/

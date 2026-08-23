@@ -29,6 +29,21 @@ uv pip compile --python-version 3.10 --torch-backend cpu requirements.txt \
 The CPU backend is deliberate: NANI has Intel graphics and resolving PyTorch's
 default Linux wheels downloads several gigabytes of unusable NVIDIA libraries.
 
+Piper's installed package currently omits the `piper_train` package imported by
+its generator CLI. Match the upstream notebook by running it from a pinned
+checkout:
+
+```bash
+mkdir -p vendor
+git clone https://github.com/rhasspy/piper-sample-generator.git \
+  vendor/piper-sample-generator
+git -C vendor/piper-sample-generator checkout \
+  2971426a55072f7d22fec416ca7800df8bd23207
+```
+
+`vendor/` is ignored. Project scripts validate the checkout commit before using
+it, so a moving branch cannot silently alter generated data.
+
 Do not run `uv sync` from this directory: the repository root and this training
 workspace intentionally have different dependency sets.
 
