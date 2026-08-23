@@ -63,9 +63,32 @@ class Net(nn.Module):
         return self.last_act(self.last_layer(x))
 
 
+def stream_hours(stream: np.ndarray) -> float:
+    """Audio hours a negative feature array represents.
+
+    Pre-windowed arrays cover EMBEDDINGS frames per row, so counting rows as
+    single frames under-reports by 16x -- which would make false-accepts-per-hour
+    look 16x worse than it is and reject every good checkpoint.
+    """
+    frames = stream.shape[0] * (EMBEDDINGS if stream.ndim == 3 else 1)
+    return frames * SECONDS_PER_EMBEDDING / 3600
+
+
 def sample_windows(stream: np.ndarray, count: int, rng: np.random.Generator
                    ) -> np.ndarray:
-    """Slice `count` random 16-embedding windows out of a flat feature stream."""
+    """Draw `count` random 16-embedding windows from a negative feature array.
+
+    openWakeWord ships its precomputed negatives already windowed as
+    (N, EMBEDDINGS, EMBEDDING_DIM) -- each row is an independent window, not a
+    frame in a continuous stream. Slicing 16 *rows* out of that yields
+    (16, 16, 96) and fails to broadcast. Handle both layouts: sample rows when
+    pre-windowed, cut windows when flat.
+    """
+    if stream.ndim == 3:
+        idx = rng.integers(0, stream.shape[0], size=count)
+        idx.sort()  # keep the mmap read roughly sequential
+        return np.asarray(stream[idx], dtype=np.float32)
+
     limit = stream.shape[0] - EMBEDDINGS
     starts = rng.integers(0, limit, size=count)
     out = np.empty((count, EMBEDDINGS, EMBEDDING_DIM), dtype=np.float32)
@@ -80,6 +103,9 @@ def contiguous_windows(stream: np.ndarray, stride: int = 1) -> np.ndarray:
     Random sampling would under-count: false accepts cluster around particular
     sounds, and skipping windows means skipping exactly the ones that fire.
     """
+    if stream.ndim == 3:  # already windowed (see sample_windows)
+        return np.asarray(stream[::stride], dtype=np.float32)
+
     n = (stream.shape[0] - EMBEDDINGS) // stride
     out = np.empty((n, EMBEDDINGS, EMBEDDING_DIM), dtype=np.float32)
     for i in range(n):
@@ -143,6 +169,11 @@ def main() -> int:
                     help="loss weight on negatives; a false accept costs far "
                          "more than a miss")
     ap.add_argument("--negative-pool", type=int, default=400_000)
+    ap.add_argument("--max-false-accepts", type=float, default=0.5,
+                    help="false accepts per hour we are willing to pay for "
+                         "recall. 0.5 is one spurious wake per two hours; a "
+                         "spurious wake costs a wasted ack, a miss costs the "
+                         "user repeating themselves.")
     ap.add_argument("--min-recall", type=float, default=0.50,
                     help="checkpoints below this recall are never kept, "
                          "however few false accepts they have")
@@ -168,12 +199,15 @@ def main() -> int:
     if stream.dtype != np.float32:
         print(f"negative stream dtype {stream.dtype}; casting per batch")
     print(f"negative stream  {stream.shape} "
-          f"({stream.shape[0] * SECONDS_PER_EMBEDDING / 3600:.0f} hours)")
+          f"({stream_hours(stream):.0f} hours)")
     neg_pool = sample_windows(stream, args.negative_pool, rng)
 
     val_stream = np.load(args.validation, mmap_mode="r")
     val_windows = contiguous_windows(val_stream)
-    val_hours = len(val_windows) * SECONDS_PER_EMBEDDING / 3600
+    # From the source array, not the windows: with a flat stream and stride 1
+    # the windows overlap, so charging each one a full 16 frames would inflate
+    # hours 16x and hide false accepts.
+    val_hours = stream_hours(val_stream)
     print(f"validation  {val_windows.shape} ({val_hours:.1f} hours)")
 
     model = Net(args.layer_dim, args.blocks)
@@ -189,8 +223,12 @@ def main() -> int:
     n_adv = args.batch_size // 4 if len(adversarial) else 0
     n_neg = args.batch_size - n_pos - n_adv
 
-    best = {"fp_per_hour": float("inf"), "recall": 0.0, "step": -1}
-    best_state = None
+    # Every evaluated checkpoint, so selection is a decision over the whole
+    # curve rather than a running minimum. The old running-minimum form
+    # (`fp < best`) could not upgrade recall on a tie and shipped a strictly
+    # dominated checkpoint: same false-accept rate, 15 points less recall.
+    history: list[dict] = []
+    states: dict[int, dict] = {}
     for step in range(1, args.steps + 1):
         model.train()
         parts = [pos_train[rng.integers(0, len(pos_train), n_pos)]]
@@ -216,20 +254,37 @@ def main() -> int:
             rec = recall(model, pos_test, args.threshold)
             print(f"step {step:>5}  loss {loss.item():.4f}  "
                   f"recall {rec:.3f}  false-accepts/hr {fp:.2f}", flush=True)
-            # Recall floor first: with 100x more negatives than positives the
-            # lowest-FP model is always the one that never fires.
-            if rec >= args.min_recall and fp < best["fp_per_hour"]:
-                best = {"fp_per_hour": fp, "recall": rec, "step": step}
-                best_state = {k: v.clone() for k, v in model.state_dict().items()}
+            history.append({"step": step, "recall": rec, "fp_per_hour": fp})
+            states[step] = {k: v.clone() for k, v in model.state_dict().items()}
 
-    if best_state is None:
-        print(f"\nno checkpoint reached the {args.min_recall:.0%} recall floor. "
-              f"More positives or more training steps are needed; exporting "
-              f"nothing rather than a model that cannot hear you.",
-              file=sys.stderr)
+    # Selection, in order of preference:
+    #   1. within the false-accept budget -> most recall (ties: fewer FAs)
+    #   2. budget unreachable -> fewest FAs (ties: MORE recall, never fewer)
+    # Maximising recall is the right objective, not minimising false accepts:
+    # with ~100x more negatives than positives the lowest-FP model is the one
+    # that never fires at all.
+    eligible = [h for h in history if h["recall"] >= args.min_recall]
+    if not eligible:
+        best_recall = max((h["recall"] for h in history), default=0.0)
+        print(f"\nno checkpoint reached the {args.min_recall:.0%} recall floor "
+              f"(best {best_recall:.1%}). More positives or more training steps "
+              f"are needed; exporting nothing rather than a model that cannot "
+              f"hear you.", file=sys.stderr)
         return 1
 
-    model.load_state_dict(best_state)
+    within = [h for h in eligible if h["fp_per_hour"] <= args.max_false_accepts]
+    if within:
+        best = max(within, key=lambda h: (h["recall"], -h["fp_per_hour"]))
+        basis = f"most recall within {args.max_false_accepts:g} false accepts/hr"
+    else:
+        best = min(eligible, key=lambda h: (h["fp_per_hour"], -h["recall"]))
+        basis = (f"no checkpoint met the {args.max_false_accepts:g}/hr budget; "
+                 f"fell back to fewest false accepts")
+
+    print(f"\nselected step {best['step']}: recall {best['recall']:.3f}, "
+          f"{best['fp_per_hour']:.2f} false accepts/hr ({basis})")
+
+    model.load_state_dict(states[best["step"]])
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     onnx_path = out / f"{args.target}.onnx"
@@ -238,6 +293,8 @@ def main() -> int:
     meta = {
         "target": args.target,
         "best_step": best["step"],
+        "selection": basis,
+        "max_false_accepts_per_hour": args.max_false_accepts,
         "recall_at_threshold": round(best["recall"], 4),
         "false_accepts_per_hour": round(best["fp_per_hour"], 3),
         "threshold": args.threshold,

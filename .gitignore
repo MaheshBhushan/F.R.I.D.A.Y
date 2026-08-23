@@ -18,3 +18,7 @@ training/clips/
 training/features/
 training/models/
 training/*.log
+
+# Local working notes -- deliberately not published (see git history: a
+# previous HANDOUT.md was folded into README.md in 4b95490).
+HANDOUT.md
