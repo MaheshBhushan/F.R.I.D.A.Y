@@ -7,6 +7,9 @@ audiomentations==0.43.1
 # 5.x changed Audio decoding to require torchcodec; upstream Clips expects the
 # direct NumPy decoder used by the 2.x API.
 datasets==2.21.0
+# Upstream invokes tf.summary at every evaluation checkpoint but omits the
+# TensorBoard implementation from its package metadata.
+tensorboard==2.20.0
 
 # Tooling used by the project-owned scripts and tests.
 pytest==9.1.1
