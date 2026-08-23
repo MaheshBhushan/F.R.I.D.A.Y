@@ -249,6 +249,21 @@ def test_speaker_actual_chunks_match_declared_size():
         assert size == CHUNK_BYTES
 
 
+def test_speaker_closes_the_output_it_creates(monkeypatch):
+    output = RecordingOutput()
+    monkeypatch.setattr("friday.voice.tts.SoundDeviceOutput", lambda: output)
+
+    async def scenario():
+        async def stream() -> AsyncIterator[str]:
+            yield "One sentence."
+
+        speaker = TTSSpeaker(FakeSynthesisTransport())
+        await speaker.speak(stream())
+
+    asyncio.run(scenario())
+    assert output.closed is True
+
+
 # ---------------------------------------------------------------------------
 # 5. Missing DEEPGRAM_API_KEY
 # ---------------------------------------------------------------------------

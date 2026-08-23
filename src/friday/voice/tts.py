@@ -247,6 +247,7 @@ class TTSSpeaker:
         mic_gate: Optional[MicGate] = None,
     ) -> None:
         self._transport = transport
+        self._owns_output = output is None
         self._output = output if output is not None else SoundDeviceOutput()
         self._chunk_bytes = chunk_bytes
         self._mic_gate = mic_gate
@@ -298,6 +299,8 @@ class TTSSpeaker:
             indicator.set_state(indicator.State.IDLE)
             if self._mic_gate is not None:
                 self._mic_gate.on_speech_end()
+            if self._owns_output:
+                self._output.close()
 
     def stop(self) -> None:
         """Hard preempt: drop queued audio, cancel in-flight synthesis, and
