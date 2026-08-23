@@ -1,0 +1,33 @@
+experiment_id: friday-baseline
+seed: 20260823
+target_phrase: Friday
+sample_rate: 16000
+window_step_ms: 10
+clip_duration_ms: 1500
+
+# These are baseline search inputs, not release thresholds. Model activation
+# parameters come from each evaluated artifact's metadata.
+training_steps: [10000]
+positive_class_weight: [1]
+negative_class_weight: [20]
+learning_rates: [0.001]
+batch_size: 128
+eval_step_interval: 500
+time_mask_max_size: [0]
+time_mask_count: [0]
+freq_mask_max_size: [0]
+freq_mask_count: [0]
+target_minimization: 0.1
+minimization_metric: ambient_false_positives_per_hour
+maximization_metric: average_viable_recall
+
+model:
+  pointwise_filters: [64, 64, 64, 64]
+  repeat_in_block: [1, 1, 1, 1]
+  mixconv_kernel_sizes: [[5], [7, 11], [9, 15], [23]]
+  residual_connection: [0, 0, 0, 0]
+  first_conv_filters: 32
+  first_conv_kernel_size: 5
+  stride: 3
+
+features: []

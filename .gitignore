@@ -19,6 +19,18 @@ training/features/
 training/models/
 training/*.log
 
+# microWakeWord has an isolated environment and potentially very large,
+# licensed datasets. Keep manifests/config/results; never commit raw corpora,
+# generated features, local recordings, or virtual environments.
+tools/microwakeword/.venv/
+tools/microwakeword/datasets/raw/
+tools/microwakeword/datasets/features/
+tools/microwakeword/datasets/generated/
+tools/microwakeword/datasets/ambient/
+tools/microwakeword/artifacts/*/checkpoints/
+tools/microwakeword/artifacts/*/saved_models/
+tools/microwakeword/artifacts/*/training.log
+
 # Local working notes -- deliberately not published (see git history: a
 # previous HANDOUT.md was folded into README.md in 4b95490).
 HANDOUT.md

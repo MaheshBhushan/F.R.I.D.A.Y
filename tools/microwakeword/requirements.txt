@@ -1,0 +1,8 @@
+# Training-only dependencies. Install into tools/microwakeword/.venv, never
+# FRIDAY's production .venv. Git revisions match the Phase 1 investigation.
+microWakeWord @ git+https://github.com/OHF-Voice/micro-wake-word.git@4665173cd35f1cff9a61e06fc427f124766c488e
+piper-sample-generator @ git+https://github.com/rhasspy/piper-sample-generator.git@2971426a55072f7d22fec416ca7800df8bd23207
+
+# Tooling used by the project-owned scripts and tests.
+pytest==9.1.1
+PyYAML==6.0.3
