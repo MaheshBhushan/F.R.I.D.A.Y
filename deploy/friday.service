@@ -48,6 +48,9 @@ Type=simple
 # No tty under systemd, so the ANSI status line has nothing to draw on. The
 # state file and the gateway's state.changed events still work -- the indicator
 # reports through those regardless of this setting.
+# Not a secret, so Environment= is fine here (see the note above: it is only
+# wrong for values that must not be world-readable via the unit properties).
+Environment=FRIDAY_WAKE_MODEL=friday,hey_friday
 Environment=FRIDAY_INDICATOR=0
 Environment=PYTHONUNBUFFERED=1
 

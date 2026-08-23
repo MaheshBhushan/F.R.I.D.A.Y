@@ -186,13 +186,45 @@ def main() -> int:
     torch.set_num_threads(max(1, (torch.get_num_threads() or 8) - 2))
 
     feat = Path(args.features) / args.target
-    pos_train = np.load(feat / "positive_train.npy")
-    pos_test = np.load(feat / "positive_test.npy")
-    adv_path = feat / "adversarial.npy"
-    adversarial = np.load(adv_path) if adv_path.exists() else np.zeros(
-        (0, EMBEDDINGS, EMBEDDING_DIM), dtype=np.float32)
 
-    print(f"positives  train {pos_train.shape}  test {pos_test.shape}")
+    def load_group(name: str) -> "tuple[np.ndarray, np.ndarray]":
+        """(batch-path, streaming-path) features for one group.
+
+        Both are needed. Streaming is the space inference actually runs in --
+        training on batch features alone produced a head that scored 0.94
+        offline and fired 0/20 through Model.predict. Batch is kept because the
+        precomputed 2000-hour negatives were built that way: if positives moved
+        to streaming while negatives stayed batch, the head could separate them
+        on the extraction artefact rather than on the phrase, which is the same
+        failure wearing a different hat.
+        """
+        empty = np.zeros((0, EMBEDDINGS, EMBEDDING_DIM), dtype=np.float32)
+        b = feat / f"{name}.npy"
+        t = feat / f"{name}.stream.npy"
+        return (np.load(b) if b.exists() else empty,
+                np.load(t) if t.exists() else empty)
+
+    pos_train_b, pos_train_s = load_group("positive_train")
+    pos_test_b, pos_test_s = load_group("positive_test")
+    adv_b, adv_s = load_group("adversarial")
+
+    if not len(pos_train_s):
+        print("no streaming-path positives found. Run features.py with "
+              "--mode both; a head trained on batch features alone does not "
+              "fire at inference.", file=sys.stderr)
+        return 1
+
+    pos_train = np.concatenate([pos_train_b, pos_train_s])
+    adversarial = np.concatenate([adv_b, adv_s])
+    # Recall is reported and selected on the STREAMING test set only. Batch
+    # recall is what made the last model look shippable when it could not hear
+    # anything at all, so it is printed for comparison and never selected on.
+    pos_test = pos_test_s
+
+    print(f"positives  train {pos_train.shape} "
+          f"(batch {len(pos_train_b)} + streaming {len(pos_train_s)})")
+    print(f"           test  streaming {pos_test_s.shape} "
+          f"batch {pos_test_b.shape}")
     print(f"adversarial      {adversarial.shape}")
 
     stream = np.load(args.negatives, mmap_mode="r")
@@ -252,8 +284,11 @@ def main() -> int:
         if step % 500 == 0 or step == args.steps:
             fp = false_accepts_per_hour(model, val_windows, args.threshold)
             rec = recall(model, pos_test, args.threshold)
+            rec_b = (recall(model, pos_test_b, args.threshold)
+                     if len(pos_test_b) else float("nan"))
             print(f"step {step:>5}  loss {loss.item():.4f}  "
-                  f"recall {rec:.3f}  false-accepts/hr {fp:.2f}", flush=True)
+                  f"recall {rec:.3f} (batch {rec_b:.3f})  "
+                  f"false-accepts/hr {fp:.2f}", flush=True)
             history.append({"step": step, "recall": rec, "fp_per_hour": fp})
             states[step] = {k: v.clone() for k, v in model.state_dict().items()}
 
@@ -300,6 +335,8 @@ def main() -> int:
         "threshold": args.threshold,
         "validation_hours": round(val_hours, 2),
         "positives_train": int(len(pos_train)),
+        "positives_train_streaming": int(len(pos_train_s)),
+        "recall_basis": "streaming-path features (inference space)",
         "adversarial": int(len(adversarial)),
         "negative_pool": int(len(neg_pool)),
         "layer_dim": args.layer_dim,

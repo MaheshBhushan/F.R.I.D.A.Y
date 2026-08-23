@@ -15,6 +15,7 @@ and 2.00s of 16kHz audio yields exactly 16 embeddings. Hence CLIP_SECONDS.
 from __future__ import annotations
 
 import argparse
+import os
 import random
 import sys
 import wave
@@ -76,6 +77,77 @@ def _place(audio: np.ndarray, rng: random.Random) -> np.ndarray:
     ])
 
 
+GAP_SAMPLES = 7680          # 0.48s of silence between clips, a whole number
+                            # of 1280-sample frames so the 2.00s window that
+                            # follows lands on a frame boundary.
+
+
+def _stream_shard(job: tuple) -> np.ndarray:
+    """Streaming-path features for one shard of clips.
+
+    THIS is the function that has to match inference. openWakeWord computes
+    melspectrograms differently when streaming than when embedding a whole clip
+    -- its own docstring calls the difference "slight numerical issues" -- and a
+    head trained on `embed_clips` output scored 0.94 recall offline while firing
+    0/20 through `Model.predict`. Measured max-abs feature difference was 29.5
+    against a feature std of 16.7: the same audio, far outside the distribution
+    the head was fitted on.
+
+    Clips are fed back to back through ONE AudioFeatures with a silence gap
+    rather than resetting per clip: reset() re-embeds 4s of random audio, which
+    over 40k clips costs more than the extraction itself, and residual state
+    from the previous clip is exactly what happens with a live microphone.
+    """
+    from openwakeword.utils import AudioFeatures
+
+    paths, seed = job
+    af = AudioFeatures()
+    rng = random.Random(seed)
+    gap = np.zeros(GAP_SAMPLES, dtype=np.int16)
+    out, skipped = [], 0
+    for path in paths:
+        audio = _read_wav(Path(path))
+        if audio is None or audio.size == 0:
+            skipped += 1
+            continue
+        placed = _place(audio, rng)
+        for chunk in (gap, placed):
+            for i in range(0, len(chunk), 1280):
+                af(chunk[i:i + 1280])
+        # The trailing 16 embeddings now cover exactly the 2.00s window.
+        window = af.get_features(EMBEDDINGS)
+        if window.shape[1:] == (EMBEDDINGS, EMBEDDING_DIM):
+            out.append(window[:1])
+    if not out:
+        return np.zeros((0, EMBEDDINGS, EMBEDDING_DIM), dtype=np.float32)
+    return np.concatenate(out).astype(np.float32)
+
+
+def compute_streaming(paths: list, seed: int = 0,
+                      workers: int = 0) -> np.ndarray:
+    """Streaming-path features, sharded across cores.
+
+    Single-threaded this is ~90 minutes for 42k clips because every 80ms frame
+    costs two ONNX calls; sharded it is bounded by the slowest core.
+    """
+    import multiprocessing as mp
+
+    workers = workers or max(1, min(8, (os.cpu_count() or 2) - 1))
+    shards = [list(paths[i::workers]) for i in range(workers)]
+    jobs = [(shard, seed + i) for i, shard in enumerate(shards) if shard]
+    print(f"    streaming path: {len(paths)} clips across {len(jobs)} workers",
+          flush=True)
+    with mp.Pool(len(jobs)) as pool:
+        parts = pool.map(_stream_shard, jobs)
+    parts = [p for p in parts if len(p)]
+    if not parts:
+        return np.zeros((0, EMBEDDINGS, EMBEDDING_DIM), dtype=np.float32)
+    features = np.concatenate(parts)
+    if features.shape[1:] != (EMBEDDINGS, EMBEDDING_DIM):
+        raise SystemExit(f"streaming feature shape {features.shape} is wrong")
+    return features
+
+
 def compute(paths: list, batch_size: int = 64, seed: int = 0,
             progress_every: int = 2000) -> np.ndarray:
     """Feature array of shape (n, 16, 96) for the given WAV paths."""
@@ -119,6 +191,15 @@ def main() -> int:
     ap.add_argument("--out", default="features")
     ap.add_argument("--target", required=True)
     ap.add_argument("--batch-size", type=int, default=64)
+    ap.add_argument("--workers", type=int, default=0,
+                    help="streaming-path shards; 0 picks cores-1")
+    ap.add_argument("--mode", choices=("batch", "streaming", "both"),
+                    default="both",
+                    help="which feature path to extract. Training uses both: "
+                         "streaming so the head matches inference, batch "
+                         "because the precomputed negatives were built that "
+                         "way and a positives-only path switch would let the "
+                         "head separate on the artefact instead of the phrase.")
     args = ap.parse_args()
 
     clips = Path(args.clips) / args.target
@@ -131,18 +212,27 @@ def main() -> int:
         "adversarial": sorted(clips.glob("adversarial/*/*.wav")),
     }
     for name, paths in groups.items():
-        dest = out / f"{name}.npy"
-        if dest.exists():
-            print(f"  {name}: exists ({np.load(dest, mmap_mode='r').shape})")
-            continue
-        if not paths:
-            print(f"  {name}: no clips")
-            continue
-        print(f"  {name}: {len(paths)} clips", flush=True)
-        features = compute(paths, batch_size=args.batch_size,
-                           seed=abs(hash(name)) % 10_000)
-        np.save(dest, features)
-        print(f"  {name}: -> {features.shape}", flush=True)
+        seed = abs(hash(name)) % 10_000
+        for mode in ("batch", "streaming"):
+            if args.mode not in (mode, "both"):
+                continue
+            dest = out / (f"{name}.npy" if mode == "batch"
+                          else f"{name}.stream.npy")
+            if dest.exists():
+                print(f"  {name} [{mode}]: exists "
+                      f"({np.load(dest, mmap_mode='r').shape})")
+                continue
+            if not paths:
+                print(f"  {name} [{mode}]: no clips")
+                continue
+            print(f"  {name} [{mode}]: {len(paths)} clips", flush=True)
+            if mode == "batch":
+                features = compute(paths, batch_size=args.batch_size, seed=seed)
+            else:
+                features = compute_streaming(paths, seed=seed,
+                                             workers=args.workers)
+            np.save(dest, features)
+            print(f"  {name} [{mode}]: -> {features.shape}", flush=True)
     return 0
 
 
