@@ -86,3 +86,21 @@ record/generate WAV
 The required human-data gate is at least 100 primary-user recordings with
 separate held-out sessions. A candidate cannot be promoted without real
 ambient false-accept measurements.
+
+Because this repository is on NTFS, copy generated feature mmaps to a local
+Linux filesystem before training. This avoids severe random-read overhead
+without changing the tracked config or dataset:
+
+```bash
+mkdir -p ~/.cache/friday-microwakeword/features
+rsync -a tools/microwakeword/datasets/features/ \
+  ~/.cache/friday-microwakeword/features/
+nice -n 10 tools/microwakeword/.venv/bin/python \
+  tools/microwakeword/scripts/train_candidate.py \
+  --experiment friday-v001 \
+  --config tools/microwakeword/configs/training-friday-v001.yaml \
+  --feature-root ~/.cache/friday-microwakeword/features
+```
+
+The experiment's `runtime-config.yaml` records the resolved cache paths, while
+`config.yaml` and its SHA-256 remain the portable source of truth.

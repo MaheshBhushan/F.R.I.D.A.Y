@@ -13,6 +13,8 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+import yaml
+
 ROOT = Path(__file__).resolve().parents[1]
 REPO = ROOT.parents[1]
 UPSTREAM = ROOT / "vendor" / "micro-wake-word"
@@ -31,6 +33,11 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--experiment", required=True)
     parser.add_argument("--config", type=Path, required=True)
+    parser.add_argument(
+        "--feature-root",
+        type=Path,
+        help="NVMe/local cache replacing datasets/features for training I/O",
+    )
     args = parser.parse_args()
     if _git("rev-parse", "HEAD", cwd=UPSTREAM) != UPSTREAM_COMMIT:
         raise SystemExit("error: canonical microWakeWord checkout is not pinned")
@@ -39,6 +46,22 @@ def main() -> int:
     artifact.mkdir(parents=True, exist_ok=True)
     config = args.config.resolve()
     shutil.copy2(config, artifact / "config.yaml")
+    runtime_config = yaml.safe_load(config.read_text())
+    if args.feature_root:
+        source_root = (ROOT / "datasets" / "features").resolve()
+        feature_root = args.feature_root.resolve()
+        for feature_set in runtime_config["features"]:
+            source = (REPO / feature_set["features_dir"]).resolve()
+            try:
+                relative = source.relative_to(source_root)
+            except ValueError as exc:
+                raise SystemExit(f"error: feature path is outside source root: {source}") from exc
+            cached = feature_root / relative
+            if not cached.is_dir():
+                raise SystemExit(f"error: cached feature directory is missing: {cached}")
+            feature_set["features_dir"] = str(cached)
+    runtime_config_path = artifact / "runtime-config.yaml"
+    runtime_config_path.write_text(yaml.safe_dump(runtime_config, sort_keys=False))
     manifest = ROOT / "datasets" / "user_positives.jsonl"
     rows = [json.loads(line) for line in manifest.read_text().splitlines() if line.strip()]
     metadata = {
@@ -49,6 +72,7 @@ def main() -> int:
         "upstream_commit": UPSTREAM_COMMIT,
         "training_config_sha256": _sha(config),
         "dataset_manifest_sha256": _sha(manifest),
+        "feature_root": str(args.feature_root.resolve()) if args.feature_root else None,
         "real_positive_count": len(rows),
         "real_positive_duration_seconds": sum(row["samples"] / row["sample_rate"] for row in rows),
     }
@@ -59,7 +83,7 @@ def main() -> int:
         sys.executable,
         "-m",
         "microwakeword.model_train_eval",
-        f"--training_config={config}",
+        f"--training_config={runtime_config_path}",
         "--train=1",
         "--restore_checkpoint=1",
         "--test_tf_nonstreaming=0",
