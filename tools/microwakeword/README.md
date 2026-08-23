@@ -14,7 +14,10 @@ Use Python 3.10, as recommended by the upstream training notebook:
 ```bash
 cd tools/microwakeword
 uv venv --python 3.10 .venv
-uv pip sync --torch-backend cpu --python .venv/bin/python requirements.lock
+uv pip sync --python .venv/bin/python requirements.lock
+uv venv --python 3.10 .venv-piper
+uv pip sync --torch-backend cpu --python .venv-piper/bin/python \
+  requirements-piper.lock
 ```
 
 `requirements.txt` contains the human-maintained top-level requirements;
@@ -24,14 +27,19 @@ it with:
 ```bash
 uv pip compile --python-version 3.10 --torch-backend cpu requirements.txt \
   -o requirements.lock
+uv pip compile --python-version 3.10 --torch-backend cpu \
+  requirements-piper.txt -o requirements-piper.lock
 ```
 
-The CPU backend is deliberate: NANI has Intel graphics and resolving PyTorch's
+The separate Piper environment is required because Piper pins
+`audiomentations==0.33`, while current microWakeWord uses newer transforms. The
+CPU backend is deliberate: NANI has Intel graphics and resolving PyTorch's
 default Linux wheels downloads several gigabytes of unusable NVIDIA libraries.
 
 Piper's installed package currently omits the `piper_train` package imported by
 its generator CLI. Match the upstream notebook by running it from a pinned
-checkout:
+checkout. The microWakeWord wheel similarly omits its `audio` package, so keep
+both canonical source trees:
 
 ```bash
 mkdir -p vendor
@@ -39,6 +47,10 @@ git clone https://github.com/rhasspy/piper-sample-generator.git \
   vendor/piper-sample-generator
 git -C vendor/piper-sample-generator checkout \
   2971426a55072f7d22fec416ca7800df8bd23207
+git clone https://github.com/OHF-Voice/micro-wake-word.git \
+  vendor/micro-wake-word
+git -C vendor/micro-wake-word checkout \
+  4665173cd35f1cff9a61e06fc427f124766c488e
 ```
 
 `vendor/` is ignored. Project scripts validate the checkout commit before using

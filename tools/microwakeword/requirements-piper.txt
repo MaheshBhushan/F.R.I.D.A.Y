@@ -1,0 +1,4 @@
+# Piper pins audiomentations 0.33 while microWakeWord needs newer transforms;
+# synthesis therefore has its own environment.
+piper-sample-generator @ git+https://github.com/rhasspy/piper-sample-generator.git@2971426a55072f7d22fec416ca7800df8bd23207
+setuptools==80.9.0

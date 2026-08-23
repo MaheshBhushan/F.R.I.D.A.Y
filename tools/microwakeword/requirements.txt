@@ -1,8 +1,16 @@
 # Training-only dependencies. Install into tools/microwakeword/.venv, never
 # FRIDAY's production .venv. Git revisions match the Phase 1 investigation.
 microWakeWord @ git+https://github.com/OHF-Voice/micro-wake-word.git@4665173cd35f1cff9a61e06fc427f124766c488e
-piper-sample-generator @ git+https://github.com/rhasspy/piper-sample-generator.git@2971426a55072f7d22fec416ca7800df8bd23207
+# Upstream uses AddColorNoise but leaves this dependency unbounded; its resolver
+# otherwise selects Piper-compatible 0.33, where that transform does not exist.
+audiomentations==0.43.1
+# 5.x changed Audio decoding to require torchcodec; upstream Clips expects the
+# direct NumPy decoder used by the 2.x API.
+datasets==2.21.0
 
 # Tooling used by the project-owned scripts and tests.
 pytest==9.1.1
 PyYAML==6.0.3
+# Legacy `webrtcvad` imported by Piper still imports pkg_resources, removed
+# from newer setuptools releases.
+setuptools==80.9.0

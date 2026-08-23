@@ -23,14 +23,17 @@ training/*.log
 # licensed datasets. Keep manifests/config/results; never commit raw corpora,
 # generated features, local recordings, or virtual environments.
 tools/microwakeword/.venv/
+tools/microwakeword/.venv-piper/
 tools/microwakeword/vendor/
 tools/microwakeword/datasets/raw/
+tools/microwakeword/datasets/downloads/
 tools/microwakeword/datasets/features/
 tools/microwakeword/datasets/generated/
 tools/microwakeword/datasets/ambient/
 tools/microwakeword/artifacts/*/checkpoints/
 tools/microwakeword/artifacts/*/saved_models/
 tools/microwakeword/artifacts/*/training.log
+tools/microwakeword/artifacts/*/work/
 
 # Local working notes -- deliberately not published (see git history: a
 # previous HANDOUT.md was folded into README.md in 4b95490).
