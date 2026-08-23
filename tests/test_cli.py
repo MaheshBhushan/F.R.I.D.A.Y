@@ -12,6 +12,7 @@ import os
 import signal
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -199,7 +200,7 @@ def test_start_bails_early_when_the_process_dies_during_boot(monkeypatch):
 def test_every_subcommand_is_wired_to_a_handler():
     parser = cli.build_parser()
     for name in ("start", "stop", "restart", "status", "logs", "ask", "say",
-                 "smoke", "doctor", "install", "uninstall", "token"):
+                 "smoke", "doctor", "install", "uninstall", "update", "token"):
         args = parser.parse_args([name] + (["x"] if name in {"ask", "say"} else []))
         assert callable(getattr(args, "func", None)), f"{name} has no handler"
 
@@ -207,6 +208,48 @@ def test_every_subcommand_is_wired_to_a_handler():
 def test_ask_joins_its_words_so_quoting_is_optional():
     args = cli.build_parser().parse_args(["ask", "what", "branch", "am", "i", "on"])
     assert " ".join(args.text) == "what branch am i on"
+
+
+def test_update_refuses_a_dirty_checkout(monkeypatch, capsys):
+    calls: list[list[str]] = []
+
+    def run(command, root):
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, " M README.md\n", "")
+
+    monkeypatch.setattr(cli, "_update_run", run)
+    monkeypatch.setattr(cli.shutil, "which", lambda name: "/usr/bin/uv")
+    monkeypatch.setattr(Path, "is_dir", lambda self: True)
+
+    args = cli.build_parser().parse_args(["update"])
+    assert args.func(args) == 2
+    assert calls == [["git", "status", "--porcelain"]]
+    assert "uncommitted changes" in capsys.readouterr().err
+
+
+def test_update_pulls_syncs_and_restarts_when_running(monkeypatch, capsys):
+    calls: list[list[str]] = []
+
+    def run(command, root):
+        calls.append(command)
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(cli, "_update_run", run)
+    monkeypatch.setattr(cli.shutil, "which", lambda name: "/usr/bin/uv")
+    monkeypatch.setattr(Path, "is_dir", lambda self: True)
+    monkeypatch.setattr(daemon, "status", lambda: daemon.Status(
+        True, True, 10, daemon.Supervisor.DIRECT))
+    monkeypatch.setattr(daemon, "restart", lambda: daemon.Status(
+        True, True, 11, daemon.Supervisor.DIRECT))
+
+    args = cli.build_parser().parse_args(["update"])
+    assert args.func(args) == 0
+    assert calls == [
+        ["git", "status", "--porcelain"],
+        ["git", "pull", "--ff-only"],
+        ["uv", "sync", "--frozen"],
+    ]
+    assert "updated and restarted" in capsys.readouterr().out
 
 
 def test_ask_and_say_refuse_cleanly_when_stopped(monkeypatch, capsys):

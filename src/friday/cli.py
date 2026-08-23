@@ -25,6 +25,7 @@ import argparse
 import asyncio
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -104,6 +105,63 @@ def cmd_restart(args: argparse.Namespace) -> int:
         return _attach() if not getattr(args, "detach", False) else 0
     print(f"{_mark(False)} restart failed: {result.detail}")
     return 1
+
+
+def _update_run(command: list[str], root: Path) -> subprocess.CompletedProcess:
+    return subprocess.run(command, cwd=root, capture_output=True, text=True,
+                          timeout=300, check=False)
+
+
+def cmd_update(args: argparse.Namespace) -> int:
+    """Fast-forward the checkout, sync locked dependencies, and restart."""
+    root = Path(__file__).resolve().parents[2]
+    if not (root / ".git").is_dir():
+        print(f"{_mark(False)} update requires a git checkout: {root}",
+              file=sys.stderr)
+        return 1
+    if shutil.which("uv") is None:
+        print(f"{_mark(False)} uv is required to update dependencies safely",
+              file=sys.stderr)
+        return 1
+
+    try:
+        dirty = _update_run(["git", "status", "--porcelain"], root)
+    except (OSError, subprocess.SubprocessError) as exc:
+        print(f"{_mark(False)} could not inspect the checkout: {exc}", file=sys.stderr)
+        return 1
+    if dirty.returncode != 0:
+        print(f"{_mark(False)} git status failed: {dirty.stderr.strip()}", file=sys.stderr)
+        return 1
+    if dirty.stdout.strip():
+        print(f"{_mark(False)} checkout has uncommitted changes; commit or stash them first",
+              file=sys.stderr)
+        return 2
+
+    was_running = daemon.status().running
+    for command, label in ((["git", "pull", "--ff-only"], "git pull"),
+                           (["uv", "sync", "--frozen"], "dependency sync")):
+        try:
+            result = _update_run(command, root)
+        except (OSError, subprocess.SubprocessError) as exc:
+            print(f"{_mark(False)} {label} failed: {exc}", file=sys.stderr)
+            return 1
+        if result.stdout.strip():
+            print(result.stdout.strip())
+        if result.returncode != 0:
+            print(f"{_mark(False)} {label} failed: {result.stderr.strip()}",
+                  file=sys.stderr)
+            return 1
+
+    if was_running:
+        restarted = daemon.restart()
+        if not restarted.healthy:
+            print(f"{_mark(False)} updated, but restart failed: {restarted.detail}",
+                  file=sys.stderr)
+            return 1
+        print(f"{_mark(True)} updated and restarted (pid {restarted.pid})")
+    else:
+        print(f"{_mark(True)} updated; friday was not running")
+    return 0
 
 
 def cmd_status(args: argparse.Namespace) -> int:
@@ -530,6 +588,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--detach", "-d", action="store_true",
                    help="return to the prompt instead of streaming")
     p.set_defaults(func=cmd_restart)
+
+    p = sub.add_parser("update", help="pull updates, sync dependencies, and restart")
+    p.set_defaults(func=cmd_update)
 
     p = sub.add_parser("status", help="is she up, and is she well?")
     p.add_argument("--json", action="store_true")

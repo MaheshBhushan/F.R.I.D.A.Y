@@ -335,7 +335,7 @@ harder to diagnose.
 `in use by pacat [P2_RECORDING]`. FRIDAY's own stream disappears from
 `pactl list source-outputs` while suspended -- the device is released, not
 merely ignored. 0 phantom detections after the reopen, because `on_forget`
-re-arms wake-word warmup and every freshly opened stream needs it. 277 tests.
+re-arms wake-word warmup and every freshly opened stream needs it. 395 tests.
 
 ### Still in `voice/`, not moved
 

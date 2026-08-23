@@ -65,6 +65,7 @@ uv run friday ask --speak "what is running"
 uv run friday say "the build is green"
 uv run friday hear --seconds 20
 uv run friday logs -f
+uv run friday update
 uv run friday stop
 ```
 
@@ -171,7 +172,7 @@ deploy/          systemd user-service template
 
 ```bash
 uv run pytest -q
-# 367 passed
+# 395 passed
 
 uv run python -m friday --selftest
 uv run friday smoke
