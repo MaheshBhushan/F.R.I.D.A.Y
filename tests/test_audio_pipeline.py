@@ -399,27 +399,18 @@ def test_connection_failure_cleans_up_and_rearms(tmp_path):
     asyncio.run(run())
 
 
-def test_wake_during_tts_stops_speech_and_starts_new_turn(tmp_path):
+def test_wake_during_tts_is_ignored_without_stopping_speech(tmp_path):
     async def run():
         capture = AudioCaptureService(Source())
         capture._ingest(_frame(0))
         detector = Detector(wake_on=1)
         lp, _ = _loop(tmp_path, detector, capture, lambda: ScriptedSTT())
         speaker = Speaker()
-        old_cancelled = asyncio.Event()
-        new_started = asyncio.Event()
-
         async def old_turn():
-            try:
-                await asyncio.Event().wait()
-            except asyncio.CancelledError:
-                old_cancelled.set()
-                raise
+            await asyncio.Event().wait()
 
         async def new_turn(detection, *, subscription, span):
-            new_started.set()
-            subscription.close()
-            return loop_mod.Turn(turn_id=span.turn_id)
+            raise AssertionError("wake during TTS must not start a new turn")
 
         async def wake_frame():
             yield b"x" * FRAME_BYTES * 4
@@ -431,19 +422,17 @@ def test_wake_during_tts_stops_speech_and_starts_new_turn(tmp_path):
         lp.audio_state = loop_mod.AudioTurnState.SPEAKING
         lp.handle_detection = new_turn
         await lp._pump(wake_frame(), asyncio.Event())
-        replacement = lp._turn_task
-        assert replacement is not None and replacement is not old
-        await asyncio.wait_for(replacement, 1)
-
-        assert speaker.stopped
-        assert old_cancelled.is_set()
-        assert new_started.is_set()
+        assert lp._turn_task is old
+        assert not speaker.stopped
+        assert not old.done()
+        old.cancel()
+        await asyncio.gather(old, return_exceptions=True)
         assert capture.metrics.active_subscribers == 0
 
     asyncio.run(run())
 
 
-def test_wake_during_ack_cancels_old_turn_before_starting_new_one(tmp_path):
+def test_wake_during_ack_is_ignored(tmp_path):
     async def run():
         capture = AudioCaptureService(Source())
         detector = Detector(wake_on=1)
@@ -460,20 +449,11 @@ def test_wake_during_ack_cancels_old_turn_before_starting_new_one(tmp_path):
             play_ack=play_ack,
             conversation_seconds=0,
         )
-        old_cancelled = asyncio.Event()
-        new_started = asyncio.Event()
-
         async def old_turn():
-            try:
-                await lp._play(loop_mod.ACK_REASONING, TurnSpan("pending"))
-            except asyncio.CancelledError:
-                old_cancelled.set()
-                raise
+            await lp._play(loop_mod.ACK_REASONING, TurnSpan("pending"))
 
         async def new_turn(detection, *, subscription, span):
-            new_started.set()
-            subscription.close()
-            return loop_mod.Turn(turn_id=span.turn_id)
+            raise AssertionError("wake during acknowledgement must be ignored")
 
         async def wake_frame():
             yield b"x" * FRAME_BYTES * 4
@@ -483,14 +463,10 @@ def test_wake_during_ack_cancels_old_turn_before_starting_new_one(tmp_path):
         await asyncio.wait_for(asyncio.to_thread(ack_started.wait), 1)
         lp.handle_detection = new_turn
         await lp._pump(wake_frame(), asyncio.Event())
-        replacement = lp._turn_task
-        assert replacement is not None and replacement is not old
-        await asyncio.wait_for(new_started.wait(), 1)
-
-        assert old_cancelled.is_set()
-        assert old.cancelled()
+        assert lp._turn_task is old
+        assert not old.done()
         release_ack.set()
-        await asyncio.wait_for(replacement, 1)
+        await asyncio.wait_for(old, 1)
         assert capture.metrics.active_subscribers == 0
 
     asyncio.run(run())
