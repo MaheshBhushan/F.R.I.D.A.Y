@@ -9,11 +9,10 @@ Design notes that are not obvious from the call order:
   pre-roll and starts retaining pending frames before the task gets a chance to
   await Deepgram, so connection latency cannot open a gap in the command.
 
-* **Barge-in is the wake word, not a phrase.** `MicGate`'s interrupt phrases
-  need a live STT stream, and there is no STT stream while she is speaking
-  (that would be full duplex, which is not built). Saying the wake word during
-  playback hard-preempts her instead: cheap, uses only what exists, and the AEC
-  path measures 23-32dB ERLE so her own voice is unlikely to self-trigger.
+* **Wake events are accepted only while idle.** Detector inference may keep
+  running, but scores produced during acknowledgements, reasoning, or TTS are
+  ignored. This prevents buffered wake audio and FRIDAY's own playback from
+  cancelling the response that the wake phrase just requested.
 
 * **The ack is awaited before speech, not overlapped with it.** Two audio
   streams on one speaker means two voices at once. The ack costs ~0.7s and
@@ -307,23 +306,21 @@ class VoiceLoop:
         async for chunk in frames:
             if stop.is_set():
                 break
-            if (self._capture is not None
-                    and self.audio_state not in (AudioTurnState.IDLE,
-                                                 AudioTurnState.SPEAKING)):
+            # Wake-trigger handling belongs to IDLE only.  In particular, do
+            # not treat detector output during an acknowledgement or TTS as
+            # barge-in: the detector is still seeing buffered microphone
+            # audio at that point and can score the just-spoken wake phrase a
+            # second time, cancelling the answer before it becomes audible.
+            # Follow-up turns use their own live STT subscription and do not
+            # require another wake event.
+            if self._capture is not None and self.audio_state is not AudioTurnState.IDLE:
                 events.debug("wake", "ignored", state=self.audio_state.value)
                 continue
             detect = getattr(self._detector, "detect_chunk", self._detector.feed_chunk)
             detection = detect(chunk)
             if detection is None:
                 continue
-            # Wake word during playback is the barge-in: preempt the old
-            # turn, then take the new utterance as an ordinary turn.
             previous_task = self._turn_task
-            if self._speaker is not None and self._speaker.is_speaking:
-                self._speaker.stop()
-            if (self.audio_state is AudioTurnState.SPEAKING
-                    and previous_task is not None and not previous_task.done()):
-                previous_task.cancel()
             # The turn runs as a task, NOT awaited here. Awaiting it stops
             # this loop pumping frames, so feed_chunk never forwards audio
             # to the live queue the turn is reading -- the turn then waits
