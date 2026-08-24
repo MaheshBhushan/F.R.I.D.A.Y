@@ -1,0 +1,25 @@
+{
+  "completed_at": "2026-08-24T10:41:18.564312+00:00",
+  "dataset_manifest_sha256": "7acbe017f506f7a5c836d5e1787e1b47308ee4b5ff170b820ccc3372d010bbea",
+  "experiment_id": "friday-v002",
+  "feature_root": "/home/maheshk/.cache/friday-microwakeword/features",
+  "git_commit": "852ad0408cd6417f0f9ea25156964c9a392531a9",
+  "model_sha256": "df423d3f57b53e489970f56f8af40f81ca313f1dcc271cd95489663812978183",
+  "model_size_bytes": 62304,
+  "recommendation": "benchmark_pending_do_not_promote",
+  "real_positive_count": 150,
+  "real_positive_duration_seconds": 375.0,
+  "selected_checkpoint": 2500,
+  "selected_validation": {
+    "ambient_false_positives": 1,
+    "ambient_false_positives_per_hour": 0.10341,
+    "average_viable_recall": 0.994460301,
+    "cutoff_at_zero_false_accepts": 0.51,
+    "recall": 0.95714,
+    "recall_at_zero_false_accepts": 0.95714
+  },
+  "started_at": "2026-08-23T21:15:59.635579+00:00",
+  "status": "trained",
+  "training_config_sha256": "6ce1a1a67d26fba8bf38f01a5fa347a05e82bb4e7d94dd2f8fa924bae3ea9e57",
+  "upstream_commit": "4665173cd35f1cff9a61e06fc427f124766c488e"
+}
