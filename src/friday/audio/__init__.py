@@ -2,8 +2,8 @@
 
 Deliberately outside `friday.voice`. The voice modules are consumers of audio;
 this package decides who is allowed to hold a device and in what state. It is
-the intended home for microphone ownership, speaker routing, echo cancellation,
-Bluetooth/headset switching, call detection and FRIDAY's listening state, so
+the intended home for microphone ownership, capture, and priority arbitration,
+call detection and FRIDAY's listening state, so
 that none of those live buried inside the wake-word or STT code.
 """
 

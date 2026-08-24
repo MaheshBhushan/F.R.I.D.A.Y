@@ -90,7 +90,7 @@ class AudioResourceManager:
         on_forget: Optional[Callable[[], None]] = None,
         on_open: Optional[Callable[[], None]] = None,
         echo_cancel: Optional[EchoCancelModule] = None,
-        manage_echo_cancel: bool = True,
+        manage_echo_cancel: bool = False,
     ) -> None:
         self._own_pid = own_pid if own_pid is not None else os.getpid()
         self._open_capture = open_capture
