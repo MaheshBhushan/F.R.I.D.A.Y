@@ -318,21 +318,21 @@ def test_follow_up_timeout_closes_audio_and_returns_to_idle(tmp_path):
     assert lp.audio_state is loop_mod.AudioTurnState.IDLE
 
 
-def test_turn_is_recorded_to_memory(tmp_path):
+def test_reflex_turn_is_not_recorded_to_session_memory(tmp_path):
     class FakeMemory:
         def __init__(self) -> None:
-            self.rows: list[str] = []
+            self.begun: list[str] = []
 
-        def record(self, text: str, **kw: Any) -> int:
-            self.rows.append(text)
-            return len(self.rows)
+        async def begin_turn(self, text: str, **kw: Any) -> str:
+            self.begun.append(text)
+            return "turn"
 
     mem = FakeMemory()
     lp, detector, _, _ = _build(
         tmp_path, transcript_events=[_final("stop")], memory=mem
     )
     asyncio.run(lp.handle_detection(detector.start()))
-    assert mem.rows and mem.rows[0].startswith("user: stop")
+    assert mem.begun == []
 
 
 def test_span_is_written_once_per_turn(tmp_path):
@@ -469,23 +469,3 @@ def test_forget_audio_clears_the_preroll_ring(tmp_path):
     assert det.ring_samples > 0
     lp._forget_audio()
     assert det.ring_samples == 0
-
-
-def test_preempted_turn_is_not_written_to_memory(tmp_path):
-    """Context survives a preemption; the truncated turn does not."""
-    class FakeMemory:
-        def __init__(self):
-            self.rows = []
-
-        def record(self, text, **kw):
-            self.rows.append(text)
-            return 1
-
-    mem = FakeMemory()
-    lp, detector, _, _ = _build(
-        tmp_path, transcript_events=[_final("stop")], memory=mem
-    )
-    turn = loop_mod.Turn(turn_id="t", transcript="tell codex to delete the old")
-    turn.preempted = True
-    lp._remember(turn)
-    assert mem.rows == []

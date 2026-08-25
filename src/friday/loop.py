@@ -117,6 +117,7 @@ class VoiceLoop:
         llm_transport: Optional[brain.Transport] = None,
         assembler: Optional[brain.ContextAssembler] = None,
         memory: Optional[Any] = None,
+        session_memory: Optional[Any] = None,
         approve: Optional[Any] = None,
         audio: Optional[AudioResourceManager] = None,
         capture: Optional[AudioCaptureService] = None,
@@ -133,6 +134,7 @@ class VoiceLoop:
         self._llm = llm_transport
         self._assembler = assembler
         self._memory = memory
+        self._session_memory = session_memory
         self._approve = approve
         self._audio = audio
         self._capture = capture
@@ -167,6 +169,7 @@ class VoiceLoop:
         subsystem -- brain, memory, world state, coding agents -- is untouched
         by a suspension.
         """
+        await self._memory_call("start")
         if self._detector is None:
             self._detector = wake.WakeWordDetector()
         stop = stop or asyncio.Event()
@@ -213,6 +216,7 @@ class VoiceLoop:
             close_stt = getattr(self._stt_factory, "close", None)
             if close_stt is not None:
                 await close_stt()
+            await self._memory_call("close")
             events.emit("audio", "capture-stopped", frames=metrics.frames_captured,
                         bytes=metrics.bytes_captured)
             indicator.clear()
@@ -415,7 +419,6 @@ class VoiceLoop:
                             tier=turn.tier, spoke=turn.spoke)
             span.write()
             self.turns.append(turn)
-            self._remember(turn)
         if (follow_up and self._capture is not None
                 and self._stt_factory is not None
                 and self._conversation_seconds > 0):
@@ -523,7 +526,6 @@ class VoiceLoop:
                                 tier=turn.tier, spoke=turn.spoke)
                 span.write()
                 self.turns.append(turn)
-                self._remember(turn)
             deadline = self._clock() + self._conversation_seconds
         if self.audio_state is not AudioTurnState.SUSPENDED:
             self._set_audio_state(AudioTurnState.IDLE)
@@ -540,21 +542,50 @@ class VoiceLoop:
             await self._do_reflex(decision, span, turn)
             return
 
-        if tier is Tier.STATE_QUERY:
-            answer = state_query.answer(transcript, span=span)
-            if not answer.escalate:
-                turn.reply = answer.text
-                await self._say_text(answer.text, span, turn)
-                span.mark("task_complete")
-                return
-            # The snapshot could not honestly answer it; don't guess.
-            turn.escalated = True
-            events.emit("route", "escalated", frm="state_query", to="reasoning",
-                        why=answer.reason if hasattr(answer, "reason") else None)
-            span.turn_kind = Tier.REASONING.value
-            turn.tier = Tier.REASONING.value
+        memory_turn = await self._memory_call(
+            "begin_turn", transcript, turn_id=turn.turn_id, route_tier=turn.tier
+        )
+        try:
+            handled = False
+            if tier is Tier.STATE_QUERY:
+                answer = state_query.answer(transcript, span=span)
+                if not answer.escalate:
+                    turn.reply = answer.text
+                    await self._say_text(answer.text, span, turn)
+                    span.mark("task_complete")
+                    handled = True
+                else:
+                    # The snapshot could not honestly answer it; don't guess.
+                    turn.escalated = True
+                    events.emit("route", "escalated", frm="state_query", to="reasoning",
+                                why=answer.reason if hasattr(answer, "reason") else None)
+                    span.turn_kind = Tier.REASONING.value
+                    turn.tier = Tier.REASONING.value
 
-        await self._do_reasoning(transcript, span, turn)
+            if not handled:
+                await self._do_reasoning(transcript, span, turn)
+        except asyncio.CancelledError as exc:
+            await self._memory_call("fail_turn", memory_turn, repr(exc))
+            raise
+        except Exception as exc:
+            await self._memory_call("fail_turn", memory_turn, repr(exc))
+            raise
+
+        if turn.reply.strip():
+            await self._memory_call(
+                "complete_turn", memory_turn, turn.reply,
+                route_tier=turn.tier or "", interrupted=turn.interrupted,
+                metadata={"spoke": turn.spoke, "escalated": turn.escalated},
+            )
+            # Preserve the pre-existing relevance memory independently of the
+            # structured hot-session context. Reflexes never reach this path.
+            if self._memory is not None:
+                with contextlib.suppress(Exception):
+                    self._memory.record(
+                        f"user: {transcript}\nfriday: {turn.reply}", kind="episodic"
+                    )
+        else:
+            await self._memory_call("fail_turn", memory_turn, "empty assistant response")
 
     async def _do_reflex(self, decision, span: TurnSpan, turn: Turn) -> None:
         action = router.dispatch_tier1(decision)
@@ -573,10 +604,12 @@ class VoiceLoop:
         # Ack first so the 1.0-2.7s TTFT is covered by a voice, not silence.
         ack_task = asyncio.create_task(self._play(ACK_REASONING, span))
         result = brain.TurnResult()
+        history = await self._memory_call("context_messages") or []
         stream = brain.complete(
             transcript,
             self._llm,
             assembler=self._assembler,
+            history=history,
             approve=self._approve,
             span=span,
             result=result,
@@ -588,7 +621,7 @@ class VoiceLoop:
                 ack_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await ack_task
-        turn.reply = result.text
+            turn.reply = result.text
 
     # -- audio out --------------------------------------------------------
 
@@ -676,7 +709,6 @@ class VoiceLoop:
                                 tier=turn.tier, spoke=turn.spoke)
                 span.write()
                 self.turns.append(turn)
-                self._remember(turn)
             return turn
 
     async def say(self, text: str) -> None:
@@ -691,17 +723,18 @@ class VoiceLoop:
             turn = Turn(turn_id=span.turn_id, transcript="")
             await self._say_text(text, span, turn)
 
-    def _remember(self, turn: Turn) -> None:
-        if self._memory is None or not turn.transcript.strip():
-            return
-        if turn.preempted:
-            # Context survives a preemption; this truncated turn does not.
-            return
-        text = f"user: {turn.transcript}"
-        if turn.reply:
-            text += f"\nfriday: {turn.reply}"
-        with contextlib.suppress(Exception):
-            self._memory.record(text, kind="episodic")
+    async def _memory_call(self, method: str, *args: Any, **kwargs: Any) -> Any:
+        """Call optional session memory without letting it break a turn."""
+        if self._session_memory is None:
+            return None
+        function = getattr(self._session_memory, method, None)
+        if function is None:
+            return None
+        try:
+            return await function(*args, **kwargs)
+        except Exception as exc:  # noqa: BLE001 - memory is non-critical context
+            events.emit("memory-error", method, error=events.quote(repr(exc)))
+            return None
 
 
 # -- construction ---------------------------------------------------------
@@ -720,8 +753,10 @@ def build_live(*, speak: bool = True) -> VoiceLoop:
         )
 
     from friday.memory import Memory
+    from friday.session_memory import SessionMemory
 
     memory = Memory()
+    session_memory = SessionMemory()
     assembler = brain.ContextAssembler(memory=memory)
 
     async def _approve(request) -> bool:
@@ -738,6 +773,7 @@ def build_live(*, speak: bool = True) -> VoiceLoop:
         llm_transport=brain.AnthropicTransport(anthropic),
         assembler=assembler,
         memory=memory,
+        session_memory=session_memory,
         approve=_approve,
         speak_enabled=speak,
     )
