@@ -17,7 +17,10 @@ import pytest
 
 from friday.core.spans import start_turn
 from friday.voice.stt import (
-    DEFAULT_ENDPOINTING_MS,
+    DEFAULT_EOT_TIMEOUT_MS,
+    DEFAULT_EOT_THRESHOLD,
+    DeepgramTransport,
+    FluxTransportPool,
     LocalVAD,
     TranscriptEvent,
     run_utterance,
@@ -163,7 +166,9 @@ async def _preroll_seam_byte_exact():
     async for _ in run_utterance(detection, transport):
         pass
 
-    assert bytes(transport.sent_audio) == expected
+    # Local VAD now stops the stream once it has sent the full trailing-silence
+    # frame that established speech-end, so the wire audio is a gapless prefix.
+    assert expected.startswith(bytes(transport.sent_audio))
     assert transport.sent_audio[: len(detection.preroll)] == detection.preroll
     seam = len(detection.preroll)
     assert transport.sent_audio[seam : seam + len(live_chunks_sent[0])] == live_chunks_sent[0]
@@ -171,18 +176,74 @@ async def _preroll_seam_byte_exact():
 
 
 # ---------------------------------------------------------------------------
-# Criterion 3: endpointing is explicitly non-default on the connection config.
+# Criterion 3: Flux uses its minimum forced end-of-turn timeout.
 # ---------------------------------------------------------------------------
 
 
-def test_endpointing_is_explicit_non_default():
-    # Deepgram SDK's own default is 10ms of trailing silence (its own docs).
-    # We must not equal that, and must state our chosen value + tradeoff.
-    assert DEFAULT_ENDPOINTING_MS != 10
-    assert DEFAULT_ENDPOINTING_MS == 100
-    fake_config = {"endpointing": DEFAULT_ENDPOINTING_MS}
-    print(f"endpointing config passed to SDK: {fake_config}")
-    assert fake_config["endpointing"] == 100
+def test_flux_does_not_split_turns_during_thinking_pauses():
+    assert DEFAULT_EOT_TIMEOUT_MS == 60_000
+    assert DEFAULT_EOT_THRESHOLD == 0.9
+
+
+def test_flux_turn_info_maps_end_of_turn_to_final():
+    from types import SimpleNamespace
+
+    transport = DeepgramTransport.__new__(DeepgramTransport)
+    transport._queue = asyncio.Queue()
+    transport._on_message(SimpleNamespace(
+        type="TurnInfo", event="EndOfTurn", transcript="hello"
+    ))
+    event = transport._queue.get_nowait()
+    assert event == TranscriptEvent(text="hello", is_final=True, speech_final=True)
+
+
+def test_close_stream_flushes_before_waiting_for_end_of_turn():
+    class FlushTransport(FakeTransport):
+        def __init__(self):
+            super().__init__([])
+            self.flushed = asyncio.Event()
+
+        async def send_close_stream(self) -> None:
+            self.flushed.set()
+
+        async def _iter(self):
+            await self.flushed.wait()
+            yield TranscriptEvent("complete", is_final=True, speech_final=True)
+
+    async def scenario():
+        transport = FlushTransport()
+        detection = _make_detection(_wav_chunks(TEST_WAV) + _silence_chunks(10))
+        return [event async for event in run_utterance(detection, transport)]
+
+    assert asyncio.run(scenario())[-1].text == "complete"
+
+
+def test_flux_pool_reuses_live_warm_socket_and_replenishes_it():
+    opened = []
+
+    class PooledFake:
+        connected = True
+
+        def __init__(self, *_args, **_kwargs):
+            opened.append(self)
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_exc):
+            self.connected = False
+
+    async def scenario():
+        pool = FluxTransportPool("key", transport_factory=PooledFake)
+        pool.prewarm()
+        await asyncio.sleep(0)
+        async with pool() as transport:
+            assert transport is opened[0]
+        await asyncio.sleep(0)
+        assert len(opened) == 2
+        await pool.close()
+
+    asyncio.run(scenario())
 
 
 # ---------------------------------------------------------------------------

@@ -2,10 +2,10 @@
 and final transcripts, and close the turn on local VAD independent of the network.
 
 Consumes AudioCaptureService subscriptions (with the legacy `WakeDetection`
-handoff retained for file/tests) and streams them to Deepgram's v1 socket with
-interim results on, while a local webrtcvad-based detector marks speech-end from
-raw audio alone. The turn closes on agreement between local VAD and Deepgram's own
-endpointing/UtteranceEnd signal, capped at MAX_WAIT_MS so a flaky connection can
+handoff retained for file/tests) and streams them to Deepgram's Flux v2 socket,
+while a local webrtcvad-based detector marks speech-end from
+raw audio alone. The turn closes on agreement between local VAD and Flux's own
+EndOfTurn signal, capped at MAX_WAIT_MS so a flaky connection can
 never stall the turn indefinitely.
 """
 
@@ -19,18 +19,17 @@ import sys
 import time
 import wave
 from dataclasses import dataclass
-from typing import Any, AsyncIterator, Optional, Protocol
+from typing import Any, AsyncIterator, Callable, Optional, Protocol
 
 from friday.audio.capture import AudioSubscription
 from friday.core.spans import TurnSpan, start_turn
 from friday.voice.wake import CHUNK_SAMPLES, PREROLL_SECONDS, SAMPLE_RATE, WakeDetection
 
-# Deepgram's SDK default is 10ms of trailing silence before it finalizes a result -
-# fast, but eager enough to finalize on a mid-sentence breath. We raise it to 100ms
-# so Deepgram-side finalization isn't the thing flapping on every short pause; the
-# real turn boundary is local VAD + MAX_WAIT_MS below, not Deepgram's own timer, so
-# this only affects how eagerly is_final/speech_final events arrive, not turn-taking.
-DEFAULT_ENDPOINTING_MS = 100
+# FRIDAY's local VAD decides when a command is over. Keep Flux from splitting a
+# turn on a thinking pause; CloseStream still flushes EndOfTurn immediately.
+DEFAULT_EOT_TIMEOUT_MS = 60_000
+DEFAULT_EOT_THRESHOLD = 0.9
+WARM_SOCKET_TTL_SECONDS = 120.0
 
 # Max time to wait, after local VAD calls speech-end, for Deepgram to agree before
 # closing the turn on best-available evidence anyway.
@@ -68,15 +67,16 @@ class Transport(Protocol):
 
 
 class DeepgramTransport:
-    """Real transport: wraps deepgram-sdk's AsyncDeepgramClient.listen.v1.connect."""
+    """Real transport: wraps Deepgram Flux via the v2 streaming endpoint."""
 
     def __init__(
         self,
         api_key: str,
         *,
-        model: str = "nova-3",
+        model: str = "flux-general-multi",
         sample_rate: int = SAMPLE_RATE,
-        endpointing: int = DEFAULT_ENDPOINTING_MS,
+        eot_timeout_ms: int = DEFAULT_EOT_TIMEOUT_MS,
+        eot_threshold: float = DEFAULT_EOT_THRESHOLD,
         extra_config: Optional[dict] = None,
     ) -> None:
         from deepgram import AsyncDeepgramClient
@@ -86,10 +86,8 @@ class DeepgramTransport:
             "model": model,
             "encoding": "linear16",
             "sample_rate": sample_rate,
-            "channels": 1,
-            "interim_results": True,
-            "endpointing": endpointing,
-            "vad_events": True,
+            "eot_timeout_ms": eot_timeout_ms,
+            "eot_threshold": eot_threshold,
             **(extra_config or {}),
         }
         self._connect_cm = None
@@ -103,7 +101,7 @@ class DeepgramTransport:
     async def __aenter__(self) -> "DeepgramTransport":
         from deepgram.core.events import EventType
 
-        self._connect_cm = self._client.listen.v1.connect(**self.config)
+        self._connect_cm = self._client.listen.v2.connect(**self.config)
         self._connection = await self._connect_cm.__aenter__()
         self._connection.on(EventType.MESSAGE, self._on_message)
         self._listen_task = asyncio.create_task(self._run_listener())
@@ -118,17 +116,15 @@ class DeepgramTransport:
 
     def _on_message(self, message: Any) -> None:
         msg_type = getattr(message, "type", None)
-        if msg_type == "Results":
-            alt = message.channel.alternatives[0]
+        if msg_type == "TurnInfo":
+            end_of_turn = message.event == "EndOfTurn"
             self._queue.put_nowait(
                 TranscriptEvent(
-                    text=alt.transcript,
-                    is_final=bool(message.is_final),
-                    speech_final=bool(message.speech_final),
+                    text=message.transcript,
+                    is_final=end_of_turn,
+                    speech_final=end_of_turn,
                 )
             )
-        elif msg_type == "UtteranceEnd":
-            self._queue.put_nowait(TranscriptEvent(text="", is_final=True, utterance_end=True))
 
     async def send_media(self, chunk: bytes) -> None:
         await self._connection.send_media(chunk)
@@ -154,6 +150,83 @@ class DeepgramTransport:
         if self._connect_cm is not None:
             await self._connect_cm.__aexit__(*exc_info)
         return None
+
+    @property
+    def connected(self) -> bool:
+        """Cheap liveness check for a parked, pre-warmed connection."""
+        return self._connection is not None and (
+            self._listen_task is not None and not self._listen_task.done()
+        )
+
+
+class FluxTransportPool:
+    """Keep one exact-config Flux socket warm between sequential voice turns."""
+
+    def __init__(
+        self,
+        api_key: str,
+        *,
+        ttl_seconds: float = WARM_SOCKET_TTL_SECONDS,
+        transport_factory: Callable[..., DeepgramTransport] = DeepgramTransport,
+        **config: Any,
+    ) -> None:
+        self._api_key = api_key
+        self._ttl = ttl_seconds
+        self._transport_factory = transport_factory
+        self._config = config
+        self._warm_task: Optional[asyncio.Task] = None
+
+    def prewarm(self) -> None:
+        if self._warm_task is None:
+            self._warm_task = asyncio.create_task(self._open())
+
+    async def _open(self) -> tuple[DeepgramTransport, float]:
+        transport = self._transport_factory(self._api_key, **self._config)
+        await transport.__aenter__()
+        return transport, time.monotonic()
+
+    def __call__(self) -> "_FluxLease":
+        return _FluxLease(self)
+
+    async def _acquire(self) -> DeepgramTransport:
+        task, self._warm_task = self._warm_task, None
+        if task is not None:
+            try:
+                transport, opened_at = await task
+                if transport.connected and time.monotonic() - opened_at <= self._ttl:
+                    return transport
+                await transport.__aexit__(None, None, None)
+            except Exception:
+                pass
+        transport = self._transport_factory(self._api_key, **self._config)
+        return await transport.__aenter__()
+
+    async def close(self) -> None:
+        task, self._warm_task = self._warm_task, None
+        if task is None:
+            return
+        try:
+            transport, _ = await task
+        except (Exception, asyncio.CancelledError):
+            return
+        await transport.__aexit__(None, None, None)
+
+
+class _FluxLease:
+    def __init__(self, pool: FluxTransportPool) -> None:
+        self._pool = pool
+        self._transport: Optional[DeepgramTransport] = None
+
+    async def __aenter__(self) -> DeepgramTransport:
+        self._transport = await self._pool._acquire()
+        return self._transport
+
+    async def __aexit__(self, *exc_info: Any) -> Optional[bool]:
+        assert self._transport is not None
+        try:
+            return await self._transport.__aexit__(*exc_info)
+        finally:
+            self._pool.prewarm()
 
 
 class LocalVAD:
@@ -209,6 +282,8 @@ async def run_utterance(
     vad_ended = asyncio.Event()
     audio_done = asyncio.Event()
     got_final = asyncio.Event()
+    pending_audio = False
+    flushed = False
     sentinel = object()
 
     async def audio_source() -> AsyncIterator[bytes]:
@@ -231,14 +306,18 @@ async def run_utterance(
                 yield chunk
 
     async def pump() -> None:
+        nonlocal pending_audio
         try:
             async for chunk in audio_source():
-                if not vad_ended.is_set() and vad.feed(chunk):
+                speech_ended = not vad_ended.is_set() and vad.feed(chunk)
+                if transport is not None:
+                    await transport.send_media(chunk)
+                    pending_audio = True
+                if speech_ended:
                     vad_ended.set()
                     if span is not None:
                         span.mark("speech_ended_vad")
-                if transport is not None:
-                    await transport.send_media(chunk)
+                    return
         except asyncio.CancelledError:
             raise
         except Exception as exc:
@@ -267,6 +346,7 @@ async def run_utterance(
             await out_queue.put(exc)
 
     async def closer() -> None:
+        nonlocal flushed
         # Wait for local VAD to call speech-end, but exhausted audio is itself
         # a definitive speech-end: audio that stops without a trailing silence
         # window (a clipped buffer, a file-fed turn, a closed mic stream) would
@@ -282,7 +362,9 @@ async def run_utterance(
             vad_ended.set()
             if span is not None and "speech_ended_vad" not in span.stages:
                 span.mark("speech_ended_vad")
-        if transport is not None:
+        if transport is not None and pending_audio:
+            await transport.send_close_stream()
+            flushed = True
             with contextlib.suppress(asyncio.TimeoutError):
                 await asyncio.wait_for(got_final.wait(), timeout=max_wait_ms / 1000)
         if span is not None:
@@ -306,7 +388,7 @@ async def run_utterance(
             if not task.done():
                 task.cancel()
         await asyncio.gather(pump_task, recv_task, closer_task, return_exceptions=True)
-        if transport is not None:
+        if transport is not None and not flushed:
             with contextlib.suppress(Exception):
                 await transport.send_close_stream()
 
@@ -349,18 +431,18 @@ def _detection_from_wav(path: str, turn_id: str = "cli") -> WakeDetection:
     )
 
 
-async def _run_file(path: str, endpointing: int) -> None:
+async def _run_file(path: str, eot_timeout_ms: int) -> None:
     api_key = _require_api_key()
     detection = _detection_from_wav(path)
     span = start_turn("reflex", turn_id=detection.turn_id)
-    async with DeepgramTransport(api_key, endpointing=endpointing) as transport:
+    async with DeepgramTransport(api_key, eot_timeout_ms=eot_timeout_ms) as transport:
         async for event in run_utterance(detection, transport, span=span):
             tag = "FINAL" if event.is_final else "interim"
             print(f"[{tag}] {event.text}")
     span.write()
 
 
-async def _run_live(endpointing: int) -> None:
+async def _run_live(eot_timeout_ms: int) -> None:
     api_key = _require_api_key()
     from friday.voice.wake import WakeWordDetector, capture_loop
 
@@ -368,7 +450,7 @@ async def _run_live(endpointing: int) -> None:
 
     async def _handle(detection: WakeDetection) -> None:
         span = start_turn("reflex", turn_id=detection.turn_id)
-        async with DeepgramTransport(api_key, endpointing=endpointing) as transport:
+        async with DeepgramTransport(api_key, eot_timeout_ms=eot_timeout_ms) as transport:
             async for event in run_utterance(detection, transport, span=span):
                 tag = "FINAL" if event.is_final else "interim"
                 print(f"[{tag}] {event.text}")
@@ -385,14 +467,14 @@ def main() -> int:
     parser = argparse.ArgumentParser(prog="python -m friday.voice.stt")
     parser.add_argument("--file", help="run a 16kHz mono 16-bit WAV through the full STT path")
     parser.add_argument("--live", action="store_true", help="run live mic capture through the full STT path")
-    parser.add_argument("--endpointing", type=int, default=DEFAULT_ENDPOINTING_MS)
+    parser.add_argument("--eot-timeout-ms", type=int, default=DEFAULT_EOT_TIMEOUT_MS)
     args = parser.parse_args()
 
     if args.file:
-        asyncio.run(_run_file(args.file, args.endpointing))
+        asyncio.run(_run_file(args.file, args.eot_timeout_ms))
         return 0
     if args.live:
-        asyncio.run(_run_live(args.endpointing))
+        asyncio.run(_run_live(args.eot_timeout_ms))
         return 0
 
     parser.print_help()

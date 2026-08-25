@@ -188,6 +188,9 @@ class VoiceLoop:
             capture = AudioCaptureService(manager)
             self._capture = capture
         await manager.start()
+        prewarm_stt = getattr(self._stt_factory, "prewarm", None)
+        if prewarm_stt is not None:
+            prewarm_stt()
         capture_task = asyncio.create_task(capture.run(stop))
         events.emit("audio", "capture-started")
         try:
@@ -207,6 +210,9 @@ class VoiceLoop:
                 task.cancel()
                 await asyncio.gather(task, return_exceptions=True)
             await manager.stop()
+            close_stt = getattr(self._stt_factory, "close", None)
+            if close_stt is not None:
+                await close_stt()
             events.emit("audio", "capture-stopped", frames=metrics.frames_captured,
                         bytes=metrics.bytes_captured)
             indicator.clear()
@@ -727,7 +733,7 @@ def build_live(*, speak: bool = True) -> VoiceLoop:
         return answer.strip().lower() == "y"
 
     return VoiceLoop(
-        stt_factory=lambda: stt.DeepgramTransport(dg),
+        stt_factory=stt.FluxTransportPool(dg),
         tts_factory=lambda: tts.DeepgramSpeakTransport(dg),
         llm_transport=brain.AnthropicTransport(anthropic),
         assembler=assembler,
