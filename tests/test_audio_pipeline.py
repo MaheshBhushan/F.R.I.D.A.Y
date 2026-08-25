@@ -161,7 +161,7 @@ def _final(text: str) -> TranscriptEvent:
     return TranscriptEvent(text, is_final=True, speech_final=True)
 
 
-def _loop(tmp_path, detector, capture, factory, *, conversation_seconds=0):
+def _loop(tmp_path, detector, capture, factory, *, follow_up=False):
     played: list[str] = []
 
     def play_ack(name: str, span: TurnSpan) -> None:
@@ -178,7 +178,7 @@ def _loop(tmp_path, detector, capture, factory, *, conversation_seconds=0):
         play_ack=play_ack,
         spans_path=tmp_path / "spans.jsonl",
         speak_enabled=False,
-        conversation_seconds=conversation_seconds,
+        follow_up=follow_up,
     )
     return lp, played
 
@@ -248,7 +248,7 @@ def test_wake_only_opens_follow_up_and_only_command_routes(tmp_path, monkeypatch
         monkeypatch.setattr(stt, "LocalVAD", lambda: CountVAD(1))
         lp, played = _loop(
             tmp_path, detector, capture, lambda: next(transports),
-            conversation_seconds=0.05,
+            follow_up=True,
         )
         capture._ingest(_frame(0))
         initial = capture.subscribe_stt()
@@ -259,12 +259,19 @@ def test_wake_only_opens_follow_up_and_only_command_routes(tmp_path, monkeypatch
         await asyncio.wait_for(follow_up.entered.wait(), 1)
         await asyncio.sleep(0.01)  # deliberate pause after wake-only
         capture._ingest(_frame(1))
-        wake_turn = await asyncio.wait_for(task, 1)
+        for _ in range(100):
+            if len(lp.turns) == 2:
+                break
+            await asyncio.sleep(0.01)
+        assert len(lp.turns) == 2
+        assert not task.done(), "wake-free conversation must remain open"
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
 
+        wake_turn = lp.turns[0]
         assert wake_turn.transcript == ""
         assert wake_turn.tier is None
         assert detector.calls == 0
-        assert len(lp.turns) == 2
         command = lp.turns[1]
         assert command.transcript == "check what Codex is doing"
         assert command.tier == "reasoning"
@@ -447,7 +454,7 @@ def test_wake_during_ack_is_ignored(tmp_path):
             detector=detector,
             capture=capture,
             play_ack=play_ack,
-            conversation_seconds=0,
+            follow_up=False,
         )
         async def old_turn():
             await lp._play(loop_mod.ACK_REASONING, TurnSpan("pending"))

@@ -296,7 +296,7 @@ def _voice_loop(tmp_path, mem, transport):
         audio_output=_RecordingOutput(),
         spans_path=tmp_path / "spans.jsonl",
         speak_enabled=False,
-        conversation_seconds=0,
+        follow_up=False,
     )
 
 

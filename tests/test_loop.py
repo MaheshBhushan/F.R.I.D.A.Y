@@ -295,7 +295,7 @@ def test_pump_subscribes_before_scheduling_stt(tmp_path):
     assert order == ["subscribed", "task-started"]
 
 
-def test_follow_up_timeout_closes_audio_and_returns_to_idle(tmp_path):
+def test_follow_up_runs_until_cancelled_and_then_closes_audio(tmp_path):
     class Source:
         async def capture(self, stop):
             if False:
@@ -308,14 +308,19 @@ def test_follow_up_timeout_closes_audio_and_returns_to_idle(tmp_path):
         stt_factory=lambda: transport,
         capture=capture,
         spans_path=tmp_path / "spans.jsonl",
-        conversation_seconds=0.01,
     )
 
-    asyncio.run(lp._follow_up_window())
+    async def scenario():
+        task = asyncio.create_task(lp._follow_up_window())
+        await asyncio.sleep(0.02)
+        assert not task.done()
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+    asyncio.run(scenario())
 
     assert transport.closed is True
     assert capture.metrics.active_subscribers == 0
-    assert lp.audio_state is loop_mod.AudioTurnState.IDLE
 
 
 def test_reflex_turn_is_not_recorded_to_session_memory(tmp_path):

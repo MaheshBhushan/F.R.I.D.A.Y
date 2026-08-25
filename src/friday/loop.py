@@ -62,9 +62,6 @@ ACK_REASONING = "checking"
 # Tier 1 actions that are answered entirely by playing an ack.
 _ACK_ONLY_ACTIONS = {"noop_ack": "yes", "pause_turn": "one_moment"}
 
-# Wake-free follow-up conversation is disabled for now. A positive injected
-# value still enables it for tests or an explicit future opt-in.
-CONVERSATION_SECONDS = 0.0
 _WAKE_PREFIX = re.compile(
     r"^\s*(?:(?:hey|okay)\s+)?friday[\s,.:;!?-]*", re.IGNORECASE
 )
@@ -127,8 +124,7 @@ class VoiceLoop:
         audio_output: Optional[Any] = None,
         spans_path: Path = DEFAULT_SPANS_PATH,
         speak_enabled: bool = True,
-        conversation_seconds: float = CONVERSATION_SECONDS,
-        clock: Callable[[], float] = time.monotonic,
+        follow_up: bool = True,
     ) -> None:
         self._detector = detector
         self._stt_factory = stt_factory
@@ -144,8 +140,7 @@ class VoiceLoop:
         self._audio_output = audio_output
         self._spans_path = spans_path
         self._speak_enabled = speak_enabled
-        self._conversation_seconds = conversation_seconds
-        self._clock = clock
+        self._follow_up = follow_up
 
         self._mic_gate = tts.MicGate()
         self._speaker: Optional[tts.TTSSpeaker] = None
@@ -423,7 +418,7 @@ class VoiceLoop:
             self.turns.append(turn)
         if (follow_up and self._capture is not None
                 and self._stt_factory is not None
-                and self._conversation_seconds > 0):
+                and self._follow_up):
             await self._follow_up_window()
             self._arm_detector()
         elif subscription is not None:
@@ -478,12 +473,8 @@ class VoiceLoop:
         return " ".join(final_parts) or best_interim
 
     async def _follow_up_window(self) -> None:
-        """Listen for wake-free turns until the active conversation expires."""
-        deadline = self._clock() + self._conversation_seconds
+        """Listen for wake-free turns until suspended or explicitly cancelled."""
         while self.audio_state is not AudioTurnState.SUSPENDED:
-            remaining = deadline - self._clock()
-            if remaining <= 0:
-                break
             assert self._capture is not None
             subscription = self._capture.subscribe_live()
             self._stt_subscription = subscription
@@ -491,12 +482,7 @@ class VoiceLoop:
             span.mark("stt_subscription_created")
             self._set_audio_state(AudioTurnState.STT_CONNECTING, turn=span.turn_id)
             try:
-                transcript = await asyncio.wait_for(
-                    self._transcribe(subscription, span), timeout=remaining
-                )
-            except asyncio.TimeoutError:
-                events.emit("conversation", "timeout", turn=span.turn_id)
-                break
+                transcript = await self._transcribe(subscription, span)
             except asyncio.CancelledError:
                 raise
             except Exception as exc:  # noqa: BLE001
@@ -528,7 +514,6 @@ class VoiceLoop:
                                 tier=turn.tier, spoke=turn.spoke)
                 span.write()
                 self.turns.append(turn)
-            deadline = self._clock() + self._conversation_seconds
         if self.audio_state is not AudioTurnState.SUSPENDED:
             self._set_audio_state(AudioTurnState.IDLE)
             indicator.set_state(indicator.State.IDLE)
