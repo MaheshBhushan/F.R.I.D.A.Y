@@ -62,7 +62,9 @@ ACK_REASONING = "checking"
 # Tier 1 actions that are answered entirely by playing an ack.
 _ACK_ONLY_ACTIONS = {"noop_ack": "yes", "pause_turn": "one_moment"}
 
-CONVERSATION_SECONDS = 15.0
+# Wake-free follow-up conversation is disabled for now. A positive injected
+# value still enables it for tests or an explicit future opt-in.
+CONVERSATION_SECONDS = 0.0
 _WAKE_PREFIX = re.compile(
     r"^\s*(?:(?:hey|okay)\s+)?friday[\s,.:;!?-]*", re.IGNORECASE
 )
