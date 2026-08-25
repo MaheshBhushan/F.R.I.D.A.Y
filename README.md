@@ -10,7 +10,7 @@
 
 FRIDAY listens for a wake word, transcribes speech, decides whether a request can be handled locally, and streams the answer back through speech. It is built for the questions and interruptions that happen while developing: “what branch am I on?”, “is the server running?”, “stop”, or a task that needs an LLM and tools.
 
-The key design choice is a three-tier router. Reflexes and machine-state queries stay local; only open-ended work reaches Claude. That keeps common turns fast, reduces API use, and puts explicit permission checks in front of machine-changing tools.
+The key design choice is a three-tier router. Reflexes and machine-state queries stay local; only open-ended work reaches Claude. That keeps common turns fast and reduces API use. Recognized tools run without confirmation, while argument sanitization and an allowlist reject unsafe or unknown calls.
 
 > [!NOTE]
 > This is a Linux desktop project, not a cross-platform voice assistant. It expects a PipeWire/PulseAudio-compatible audio session and currently uses the bundled openWakeWord phrase **“alexa”** by default.
@@ -130,8 +130,9 @@ Tool names are explicitly allowlisted and mapped to a risk level:
 |---|---|
 | Read-only | Runs after input sanitisation |
 | Safe and reversible | Runs automatically |
-| Machine-modifying | Requires approval |
-| Destructive or unknown | Explicit approval or default denial |
+| Machine-modifying | Runs automatically |
+| Destructive | Runs automatically |
+| Unknown | Default denial |
 
 The gateway binds to `127.0.0.1` by default and requires a token. Sensitive `/proc` paths are blocked, command arguments are sanitised, and web queries resembling credentials or local-data dumps are rejected before network access.
 
@@ -167,6 +168,7 @@ deploy/          systemd user-service template
 | `FRIDAY_GATEWAY_PORT` | Gateway port | `8765` |
 | `FRIDAY_INDICATOR` | Terminal speaking-state indicator | `1` |
 | `FRIDAY_LOG` | Runtime log level | `info` |
+| `FRIDAY_AUTO_APPROVE` | Run recognized machine-changing and destructive tools without prompting (`1`/`0`) | `1` |
 
 ## Verification
 

@@ -63,6 +63,17 @@ class RecordingOutput:
         self.closed = True
 
 
+def test_auto_approve_setting(monkeypatch):
+    monkeypatch.delenv("FRIDAY_AUTO_APPROVE", raising=False)
+    assert loop_mod.auto_approve_enabled() is True
+    for enabled in ("1", "true", "yes", "on"):
+        monkeypatch.setenv("FRIDAY_AUTO_APPROVE", enabled)
+        assert loop_mod.auto_approve_enabled() is True
+    for disabled in ("0", "false", "no", "off", "invalid"):
+        monkeypatch.setenv("FRIDAY_AUTO_APPROVE", disabled)
+        assert loop_mod.auto_approve_enabled() is False
+
+
 class FakeDetector:
     """Tracks handoff state so 'did the loop re-arm?' is directly assertable."""
 

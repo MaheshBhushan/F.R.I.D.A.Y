@@ -32,7 +32,7 @@ from friday.tools.websearch import web_search
 #   - check_agent_status: only captures pane text, no side effect -> READ_ONLY.
 #   - delegate_coding_agent: spawns a process that can edit the user's files
 #     -> MACHINE_MODIFYING (reversible via git / killing the session, but not
-#     read-only, so it needs confirmation like install_package).
+#     read-only).
 #   - stop_coding_agent: kills an in-progress agent, which can discard
 #     uncommitted work the agent was mid-way through -> DESTRUCTIVE.
 RISK.update(
@@ -139,15 +139,15 @@ async def open_app(app: str) -> str:
 
 
 async def install_package(package: str) -> str:
-    """MACHINE_MODIFYING. Install a system package (confirm first)."""
+    """MACHINE_MODIFYING. Install a system package."""
     name = package
     if not name.replace("-", "").replace("_", "").replace("+", "").isalnum():
         raise PermissionDenied(f"refused: implausible package name {package!r}")
-    return await _run(["pacman", "-S", "--noconfirm", name], timeout=300.0)
+    return await _run(["sudo", "-n", "pacman", "-S", "--noconfirm", name], timeout=300.0)
 
 
 async def delete_path(path: str) -> str:
-    """DESTRUCTIVE. Delete a file (explicit approval, exact path shown)."""
+    """DESTRUCTIVE. Delete a file."""
     resolved = safe_path(path)
     if resolved.is_dir():
         raise PermissionDenied(f"refused: {path!r} is a directory")
@@ -156,7 +156,7 @@ async def delete_path(path: str) -> str:
 
 
 async def delegate_coding_agent(command: str, cwd: str, label: str = "task") -> str:
-    """MACHINE_MODIFYING. Spawn a coding agent in a new tmux session (confirm first)."""
+    """MACHINE_MODIFYING. Spawn a coding agent in a new tmux session."""
     try:
         argv = shlex.split(command)
     except ValueError as exc:
@@ -177,7 +177,7 @@ async def check_agent_status(session: str) -> str:
 
 
 async def stop_coding_agent(session: str) -> str:
-    """DESTRUCTIVE. Kill a friday-owned agent session (explicit approval)."""
+    """DESTRUCTIVE. Kill a friday-owned agent session."""
     await asyncio.to_thread(coding_agents.stop, session)
     return f"stopped {session}"
 
@@ -255,7 +255,7 @@ TOOL_SPECS: list[dict] = [
     },
     {
         "name": "install_package",
-        "description": "Install a system package. Modifies the machine; needs confirmation.",
+        "description": "Install a system package.",
         "input_schema": {
             "type": "object",
             "properties": {"package": {"type": "string"}},
@@ -264,7 +264,7 @@ TOOL_SPECS: list[dict] = [
     },
     {
         "name": "delete_path",
-        "description": "Delete a file. Destructive; needs explicit approval.",
+        "description": "Delete a file.",
         "input_schema": {
             "type": "object",
             "properties": {"path": {"type": "string"}},
@@ -274,8 +274,7 @@ TOOL_SPECS: list[dict] = [
     {
         "name": "delegate_coding_agent",
         "description": "Spawn a coding agent (e.g. `claude`, `codex`) in a new tmux "
-                       "session and hand it a task command. Modifies the machine; "
-                       "needs confirmation. The user can `tmux -L friday attach -t "
+                       "session and hand it a task command. The user can `tmux -L friday attach -t "
                        "<session>` at any time to watch or take over.",
         "input_schema": {
             "type": "object",
@@ -299,8 +298,7 @@ TOOL_SPECS: list[dict] = [
     },
     {
         "name": "stop_coding_agent",
-        "description": "Kill a friday-owned coding-agent tmux session. Destructive; "
-                       "needs explicit approval.",
+        "description": "Kill a friday-owned coding-agent tmux session.",
         "input_schema": {
             "type": "object",
             "properties": {"session": {"type": "string"}},

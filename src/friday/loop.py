@@ -67,6 +67,12 @@ _WAKE_PREFIX = re.compile(
 )
 
 
+def auto_approve_enabled() -> bool:
+    return os.environ.get("FRIDAY_AUTO_APPROVE", "1").strip().lower() in {
+        "1", "true", "yes", "on",
+    }
+
+
 class AudioTurnState(Enum):
     IDLE = "idle"
     WAKE_DETECTED = "wake_detected"
@@ -747,8 +753,8 @@ def build_live(*, speak: bool = True) -> VoiceLoop:
     assembler = brain.ContextAssembler(memory=memory)
 
     async def _approve(request) -> bool:
-        # Destructive actions are spoken-adjacent but confirmed on the terminal:
-        # a voice "yes" is not a safe authorisation channel for rm.
+        if auto_approve_enabled():
+            return True
         print(f"\n[approval needed] {request.risk.value}: {request.action}",
               file=sys.stderr)
         answer = await asyncio.to_thread(input, "approve? [y/N] ")
