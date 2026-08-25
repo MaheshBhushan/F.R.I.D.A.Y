@@ -69,6 +69,10 @@ ALLOWED_COMMANDS: dict[str, frozenset[str]] = {
     "git": frozenset({"status", "log", "diff", "branch", "show", "remote"}),
     "systemctl": frozenset({"status", "is-active", "is-enabled", "list-units"}),
     "journalctl": frozenset(),
+    "tmux": frozenset({
+        "has-session", "list-clients", "list-panes", "list-sessions",
+        "list-windows", "show-options", "show-window-options",
+    }),
 }
 
 # Any occurrence of these in a raw command string means we refuse: they are

@@ -284,11 +284,19 @@ def test_safe_argv_refuses_nul_byte():
         ("git status", ["git", "status"]),
         ("git log -n 5", ["git", "log", "-n", "5"]),
         ("systemctl status sshd", ["systemctl", "status", "sshd"]),
+        ("tmux list-sessions", ["tmux", "list-sessions"]),
+        ("tmux list-panes -a", ["tmux", "list-panes", "-a"]),
         ("uptime", ["uptime"]),
     ],
 )
 def test_safe_argv_allows_read_only_commands(raw, expected):
     assert safe_argv(raw) == expected
+
+
+@pytest.mark.parametrize("raw", ["tmux send-keys echo pwned", "tmux kill-server"])
+def test_safe_argv_refuses_mutating_tmux_commands(raw):
+    with pytest.raises(PermissionDenied):
+        safe_argv(raw)
 
 
 @sync
