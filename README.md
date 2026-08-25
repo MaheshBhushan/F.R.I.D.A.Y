@@ -1,5 +1,7 @@
 <h1 align="center">F.R.I.D.A.Y</h1>
 
+<p align="center"><strong>Fast Responsive Intelligent Desktop Agent for You</strong></p>
+
 <p align="center">A low-latency, voice-first AI assistant for a Linux developer workstation.</p>
 
 <p align="center">
