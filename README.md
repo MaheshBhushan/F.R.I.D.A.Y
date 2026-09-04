@@ -26,7 +26,7 @@ The key design choice is a three-tier router. Reflexes and machine-state queries
 - Microphone arbitration that yields to calls, meetings, and recording apps
 - Authenticated local WebSocket gateway and scriptable CLI
 - Direct daemon mode or systemd user-service operation
-- Structured latency spans and 367 automated tests
+- Structured latency spans and an offline test suite with fake service transports
 
 ## Quickstart
 
@@ -82,8 +82,8 @@ Install the supplied systemd user service with:
 uv run friday install --now
 ```
 
-> [!WARNING]
-> [`deploy/friday.service`](deploy/friday.service) contains an absolute path for the original checkout. Update its `WorkingDirectory`, `ExecStart`, and `ExecStartPost` paths before installing it elsewhere.
+> [!NOTE]
+> [`deploy/friday.service`](deploy/friday.service) is a template. `friday install` fills in the checkout path, so do not copy it into `~/.config/systemd/user/` by hand.
 
 ## Architecture
 
@@ -168,7 +168,7 @@ deploy/          systemd user-service template
 | `FRIDAY_GATEWAY_PORT` | Gateway port | `8765` |
 | `FRIDAY_INDICATOR` | Terminal speaking-state indicator | `1` |
 | `FRIDAY_LOG` | Runtime log level | `info` |
-| `FRIDAY_AUTO_APPROVE` | Run recognized machine-changing and destructive tools without prompting (`1`/`0`) | `1` |
+| `FRIDAY_AUTO_APPROVE` | Run recognized machine-changing and destructive tools without prompting (`1`/`0`). With `0`, the foreground daemon asks on the terminal and the systemd service denies them, since it has no terminal | `1` |
 | `FRIDAY_VAD_PAUSE_MS` | Local silence before entering possible-end state | `400` |
 | `FRIDAY_ENDPOINT_FAST_MS` | Total silence fallback for short complete commands | `650` |
 | `FRIDAY_ENDPOINT_PATIENT_MS` | Total silence fallback for long or incomplete speech | `1800` |
@@ -183,7 +183,7 @@ Claude.
 
 ```bash
 uv run pytest -q
-# 395 passed
+# 463 passed
 
 uv run python -m friday --selftest
 uv run friday smoke
@@ -199,7 +199,6 @@ External services are injected behind transport interfaces, so the automated sui
 - Dynamic TTS requires Deepgram; only acknowledgement clips are local.
 - Playback interruption is wake-word based, not full duplex.
 - Echo-cancellation attenuation still needs a controlled hardware measurement.
-- The service template is tied to the original checkout path.
 
 ## Author
 

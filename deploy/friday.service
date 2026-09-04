@@ -1,10 +1,12 @@
 # FRIDAY voice assistant -- systemd *user* unit.
 #
+# This is a TEMPLATE. `@ROOT@` is the absolute checkout path and `@ROOT_URI@`
+# its percent-encoded form for the Documentation= URI; `friday install`
+# renders both and writes the result to ~/.config/systemd/user/. Do not cp
+# this file by hand -- systemd would try to exec a literal "@ROOT@".
+#
 # Install:
-#     mkdir -p ~/.config/systemd/user
-#     cp deploy/friday.service ~/.config/systemd/user/
-#     systemctl --user daemon-reload
-#     systemctl --user enable --now friday
+#     uv run friday install --now
 #
 # Check:
 #     systemctl --user status friday
@@ -18,14 +20,14 @@
 
 [Unit]
 Description=FRIDAY voice assistant
-Documentation=file:/run/media/maheshk/New%%20Volume1/MK-solutions/friday/GOLIVE.md
+Documentation=file:@ROOT_URI@/GOLIVE.md
 # PipeWire is reached over the session socket, so starting before it is up just
 # produces a failed capture open and a restart loop.
 After=pipewire.service pipewire-pulse.service
 # The project lives on a removable NTFS volume, so the mount is a hard
 # prerequisite: without it ExecStart's interpreter does not exist and systemd
 # retries until the crash-loop brake trips.
-RequiresMountsFor="/run/media/maheshk/New Volume1/MK-solutions/friday"
+RequiresMountsFor="@ROOT@"
 Wants=pipewire.service
 # StartLimit* belong to [Unit], not [Service] -- systemd silently ignores them
 # in [Service], which would leave the crash-loop brake quietly disabled.
@@ -54,8 +56,8 @@ Environment=FRIDAY_WAKE_MODEL=friday,hey_friday
 Environment=FRIDAY_INDICATOR=0
 Environment=PYTHONUNBUFFERED=1
 
-WorkingDirectory=/run/media/maheshk/New Volume1/MK-solutions/friday
-ExecStart="/run/media/maheshk/New Volume1/MK-solutions/friday/.venv/bin/python" -m friday
+WorkingDirectory=@ROOT@
+ExecStart="@ROOT@/.venv/bin/python" -m friday
 
 # Prove it is actually serving before systemd calls the start a success. A
 # process that booted but cannot answer health is not "running" in any sense
@@ -64,7 +66,7 @@ ExecStart="/run/media/maheshk/New Volume1/MK-solutions/friday/.venv/bin/python" 
 # ExecStartPost the moment ExecStart forks -- seconds before the gateway binds
 # its port. Without it, every start failed its own readiness check and
 # Restart=always turned that into a crash loop.
-ExecStartPost="/run/media/maheshk/New Volume1/MK-solutions/friday/.venv/bin/python" -m friday.gateway --smoke --wait 60
+ExecStartPost="@ROOT@/.venv/bin/python" -m friday.gateway --smoke --wait 60
 
 # Sweep a leftover module-echo-cancel after the process is gone, however it
 # went. The in-process cleanup handles the normal case, but it cannot run at
@@ -73,7 +75,7 @@ ExecStartPost="/run/media/maheshk/New Volume1/MK-solutions/friday/.venv/bin/pyth
 # other application's capture device list -- that is what silently cost Chrome
 # its microphone -- so this backstop is worth a subprocess on every stop.
 # `-` prefix: a failed sweep must not make `systemctl stop` report failure.
-ExecStopPost=-"/run/media/maheshk/New Volume1/MK-solutions/friday/.venv/bin/friday" reap --quiet
+ExecStopPost=-"@ROOT@/.venv/bin/friday" reap --quiet
 
 Restart=always
 RestartSec=3

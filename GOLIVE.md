@@ -495,10 +495,11 @@ there, and nothing could see it.
 through this user's PipeWire session, and a system unit would need an explicit
 seat handoff to touch audio at all.
 
-    mkdir -p ~/.config/systemd/user
-    cp deploy/friday.service ~/.config/systemd/user/
-    systemctl --user daemon-reload
-    systemctl --user enable --now friday
+    uv run friday install --now
+
+The file in `deploy/` is a template: `friday install` renders `@ROOT@` to the
+checkout path and does the daemon-reload and enable. Copying it by hand leaves
+the placeholder in place and systemd tries to exec a literal `@ROOT@`.
 
 Details worth knowing:
 

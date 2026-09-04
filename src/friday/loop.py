@@ -874,6 +874,12 @@ def build_live(*, speak: bool = True) -> VoiceLoop:
     async def _approve(request) -> bool:
         if auto_approve_enabled():
             return True
+        if not sys.stdin.isatty():
+            # Under systemd there is nobody to answer; input() would raise
+            # EOFError and surface as a generic tool error. Deny explicitly
+            # so the model reports "denied", not "something broke".
+            events.emit("approval", "denied", why="no tty", action=request.action)
+            return False
         print(
             f"\n[approval needed] {request.risk.value}: {request.action}",
             file=sys.stderr,

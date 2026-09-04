@@ -262,3 +262,29 @@ def test_ask_and_say_refuse_cleanly_when_stopped(monkeypatch, capsys):
         args = cli.build_parser().parse_args([name, "hello"])
         assert args.func(args) == 2
     assert "not running" in capsys.readouterr().err
+
+
+def test_render_unit_fills_placeholders_and_survives_spaces():
+    """The template must not leak a literal @ROOT@ into systemd, and a checkout
+    on a path with spaces (the original lives on 'New Volume1') needs the
+    quoted Exec* lines plus a %%-escaped Documentation URI."""
+    from pathlib import Path
+
+    from friday import cli
+
+    template = (Path(__file__).resolve().parent.parent / "deploy" / "friday.service").read_text()
+    root = Path("/run/media/me/New Volume1/friday")
+    unit = cli.render_unit(template, root)
+    assert "@ROOT" not in unit
+    assert 'ExecStart="/run/media/me/New Volume1/friday/.venv/bin/python" -m friday' in unit
+    assert 'RequiresMountsFor="/run/media/me/New Volume1/friday"' in unit
+    assert "Documentation=file:/run/media/me/New%%20Volume1/friday/GOLIVE.md" in unit
+
+
+def test_render_unit_rejects_template_without_placeholder():
+    import pytest
+
+    from friday import cli
+
+    with pytest.raises(ValueError):
+        cli.render_unit("[Service]\nExecStart=/usr/bin/true\n", Path("/x"))

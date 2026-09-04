@@ -575,8 +575,24 @@ def _run_ok(cmd: list[str]) -> Optional[str]:
 # ----------------------------------------------------------------- install
 
 
+def render_unit(template: str, root: Path) -> str:
+    """Fill the unit template's `@ROOT@` / `@ROOT_URI@` placeholders.
+
+    `@ROOT@` is quoted in the template wherever systemd splits on whitespace
+    (Exec*, RequiresMountsFor), so a checkout path with spaces survives.
+    `@ROOT_URI@` is the percent-encoded form for `Documentation=`, with `%`
+    doubled because systemd treats a lone `%` as a specifier."""
+    from urllib.parse import quote
+
+    if "@ROOT@" not in template:
+        raise ValueError("unit template has no @ROOT@ placeholder")
+    uri = quote(str(root)).replace("%", "%%")
+    return template.replace("@ROOT_URI@", uri).replace("@ROOT@", str(root))
+
+
 def cmd_install(args: argparse.Namespace) -> int:
-    source = Path(__file__).resolve().parent.parent.parent / "deploy" / "friday.service"
+    root = Path(__file__).resolve().parent.parent.parent
+    source = root / "deploy" / "friday.service"
     if not source.exists():
         print(f"{_mark(False)} unit template not found at {source}", file=sys.stderr)
         return 1
@@ -595,7 +611,7 @@ def cmd_install(args: argparse.Namespace) -> int:
     target_dir = Path.home() / ".config" / "systemd" / "user"
     target_dir.mkdir(parents=True, exist_ok=True)
     target = target_dir / daemon.UNIT_NAME
-    target.write_text(source.read_text())
+    target.write_text(render_unit(source.read_text(), root))
     print(f"{_mark(True)} installed {target}")
 
     if subprocess.call(["systemctl", "--user", "daemon-reload"]) != 0:
