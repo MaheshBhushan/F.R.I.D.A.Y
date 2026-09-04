@@ -95,48 +95,15 @@ TIER1_ACTIONS = {
 
 
 # --- Tier 2: state queries answered from friday.state ------------------------
+#
+# The shapes themselves live in `friday.tiers.intent`, shared with the Tier 2
+# answerer so the two cannot drift. Exact regexes first, then a fuzzy topic
+# matcher for paraphrases ("battery level?", "which branch", "is anything
+# listening on 8080"). See that module for the design.
 
-_TIER2_PATTERNS = [
-    re.compile(r"^what('s| is)\s+\S+\s+doing\??$"),
-    re.compile(r"^what'?s\s+running\??$"),
-    re.compile(r"^what'?s\s+happening\??$"),
-    re.compile(r"^any\s+(failures|errors)\??$"),
-    re.compile(r"^any\s+tests?\s+fail(ing|ed)\??$"),
-    re.compile(r"^what\s+branch\s+(am i on|is this)\??$"),
-    re.compile(r"^is\s+.+\s+running\??$"),
-    re.compile(r"^how many\s+tests?\s+fail(ed|ing)\??$"),
-    re.compile(r"^what'?s\s+in\s+progress\??$"),
-    re.compile(r"^(?:how'?s|what'?s)\s+(?:the\s+)?(?:load|memory|ram|battery|disk)\b.*$"),
-    re.compile(r"^how\s+much\s+(?:memory|ram|disk)\s+.*$"),
-]
+from friday.tiers import intent as _intent
 
-# Canonical example phrases, used ONLY to test whether a partial transcript
-# is a prefix of a state-query shape (not matched as regexes themselves).
-_TIER2_CANONICAL_EXAMPLES = (
-    "what's codex doing",
-    "what is codex doing",
-    "what's running",
-    "what's happening",
-    "any failures",
-    "any errors",
-    "any tests failing",
-    "what branch am i on",
-    "what branch is this",
-    "is the dev server running",
-    "how many tests failed",
-    "what's in progress",
-)
-
-
-def _normalize(text: str) -> str:
-    text = text.strip().lower()
-    text = re.sub(r"\s+", " ", text)
-    text = text.rstrip("?.!")
-    # Patterns are written against the contracted forms; fold the expanded
-    # spellings in here so each shape needs only one regex.
-    text = re.sub(r"\bwhat is\b", "what's", text)
-    text = re.sub(r"\bhow is\b", "how's", text)
-    return text.strip()
+_normalize = _intent.normalize
 
 
 def _matches_tier1(text: str) -> Optional[str]:
@@ -147,10 +114,7 @@ def _matches_tier1(text: str) -> Optional[str]:
 
 
 def _matches_tier2(text: str) -> Optional[str]:
-    for pattern in _TIER2_PATTERNS:
-        if pattern.match(text):
-            return pattern.pattern
-    return None
+    return _intent.is_state_query(text)
 
 
 def _is_ambiguous_partial(text: str) -> bool:
@@ -165,9 +129,7 @@ def _is_ambiguous_partial(text: str) -> bool:
 
 
 def _is_tier2_prefix(text: str) -> bool:
-    if not text:
-        return False
-    return any(example.startswith(text) for example in _TIER2_CANONICAL_EXAMPLES)
+    return _intent.is_prefix(text)
 
 
 def classify(text: str, is_final: bool = True) -> RouteDecision:

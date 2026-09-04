@@ -27,35 +27,12 @@ from friday.core.spans import TurnSpan
 _AGENT_NAMES = ("claude", "codex")
 
 
-# Reuse the router's normalizer rather than keeping a second copy: the two
-# drifted apart once already (contracted vs expanded "what is"), which routed
-# utterances here that this module then could not match.
-from friday.router import _normalize
-
-
-# --- question-kind patterns --------------------------------------------------
-# Superset of router.py's Tier 2 shapes plus a few resource-pressure phrasings
-# from T7's own scope; router.py decides *whether* something is routed here,
-# this table decides *what kind* of state question it is once it arrives.
-
-_PATTERNS: tuple[tuple[str, re.Pattern], ...] = (
-    ("agent_doing", re.compile(r"^what(?:'s| is)\s+(\S+)\s+doing$")),
-    ("whats_running", re.compile(r"^what'?s\s+running$")),
-    ("whats_happening", re.compile(r"^what'?s\s+happening$")),
-    ("in_progress", re.compile(r"^what'?s\s+in\s+progress$")),
-    ("branch", re.compile(r"^what\s+branch\s+(?:am i on|is this)$")),
-    ("is_running", re.compile(r"^is\s+(.+?)\s+running$")),
-    ("failures", re.compile(r"^any\s+(?:failures|errors)$")),
-    ("test_failures", re.compile(r"^any\s+tests?\s+fail(?:ing|ed)$")),
-    ("test_failures_count", re.compile(r"^how many\s+tests?\s+fail(?:ed|ing)$")),
-    (
-        "resources",
-        re.compile(
-            r"^(?:how'?s|what'?s)\s+(?:the\s+)?(?:load|memory|ram|battery|disk)"
-            r"(?:\s+(?:usage|looking|at))?$"
-        ),
-    ),
-)
+# Question-kind matching (exact shapes + fuzzy paraphrases) lives in
+# `friday.tiers.intent`, shared with the router: router.py decides *whether*
+# something is routed here, intent.classify_kind decides *what kind* of state
+# question it is, and both consult the same table.
+from friday.tiers.intent import classify_kind as _classify_kind
+from friday.tiers.intent import normalize as _normalize
 
 
 @dataclass
@@ -206,6 +183,10 @@ def _fmt_in_progress(snap: dict, match: Optional[re.Match]) -> StateAnswer:
 
 def _fmt_is_running(snap: dict, match: Optional[re.Match]) -> StateAnswer:
     target = match.group(1).lower() if match else ""
+    # "is the dev server running" captures "the dev server"; strip the
+    # article so the substring test against process/pane names can hit.
+    target = re.sub(r"^(?:the|my|a|an)\s+", "", target)
+    target = re.sub(r"\s+(?:still|currently|even)$", "", target).strip()
     ports = snap.get("listening_ports") or []
     panes = snap.get("tmux_panes") or []
     procs = snap.get("notable_processes") or []
@@ -290,14 +271,6 @@ _FORMATTERS: dict[str, Callable[[dict, Optional[re.Match]], StateAnswer]] = {
     "test_failures": _fmt_unanswerable_failures,
     "test_failures_count": _fmt_unanswerable_failures,
 }
-
-
-def _classify_kind(norm: str) -> tuple[Optional[str], Optional[re.Match]]:
-    for kind, pattern in _PATTERNS:
-        m = pattern.match(norm)
-        if m:
-            return kind, m
-    return None, None
 
 
 def answer(text: str, span: Optional[TurnSpan] = None) -> StateAnswer:
