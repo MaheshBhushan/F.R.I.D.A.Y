@@ -656,6 +656,26 @@ def cmd_token(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_stats(args: argparse.Namespace) -> int:
+    """Latency percentiles from the spans log. Percentiles only, never means:
+    a voice assistant is judged by its tail, and averages hide it."""
+    from friday.scripts import percentiles
+
+    path = Path(args.path) if args.path else percentiles.DEFAULT_SPANS_PATH
+    records = percentiles.filter_records(
+        percentiles.load_records(path), kind=args.kind, last=args.last
+    )
+    if not records:
+        print(f"{_mark(None)} no turns recorded" + (f" for kind={args.kind}" if args.kind else "") + f" in {path}")
+        return 0
+    summary = percentiles.summarize(records)
+    if args.json:
+        print(json.dumps(summary, indent=2))
+    else:
+        print(percentiles.format_table(summary))
+    return 0
+
+
 # -------------------------------------------------------------------- parser
 
 
@@ -761,6 +781,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("endpoint-test", help="diagnose one VAD/Flux turn without Claude")
     p.set_defaults(func=cmd_endpoint_test)
+
+    p = sub.add_parser("stats", help="latency percentiles per stage from the spans log")
+    p.add_argument("--kind", choices=("reflex", "state_query", "reasoning"), help="only this turn kind")
+    p.add_argument("--last", type=int, metavar="N", help="only the most recent N turns")
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--path", help="spans file (default ~/.friday/spans.jsonl)")
+    p.set_defaults(func=cmd_stats)
 
     p = sub.add_parser("token", help="print the gateway token")
     p.add_argument("--rotate", action="store_true")
