@@ -888,8 +888,8 @@ def build_live(*, speak: bool = True) -> VoiceLoop:
         return answer.strip().lower() == "y"
 
     return VoiceLoop(
-        stt_factory=stt.FluxTransportPool(dg),
-        tts_factory=lambda: tts.DeepgramSpeakTransport(dg),
+        stt_factory=stt.FluxTransportPool(dg, **stt.env_stt_options()),
+        tts_factory=lambda: tts.DeepgramSpeakTransport(dg, **tts.env_tts_options()),
         llm_transport=brain.AnthropicTransport(anthropic),
         assembler=assembler,
         memory=memory,

@@ -18,15 +18,15 @@ The key design choice is a three-tier router. Reflexes and machine-state queries
 ## What works
 
 - Streaming wake word → STT → routing → reasoning → TTS loop
-- Local answers from Git, processes, ports, tmux, battery, disk, and memory state
+- Local answers from Git, processes, ports, tmux, battery, disk, and memory state, matched on paraphrases ("battery level?", "is postgres up") without an LLM
 - Pre-rendered acknowledgements while reasoning is in progress
 - Barge-in by saying the wake word during playback
 - SQLite FTS5 long-term memory with bounded prompt retrieval
-- Gated local tools and optional Exa web search
+- Gated local tools, screen capture for "what am I looking at" turns, and optional Exa web search
 - Microphone arbitration that yields to calls, meetings, and recording apps
 - Authenticated local WebSocket gateway and scriptable CLI
 - Direct daemon mode or systemd user-service operation
-- Structured latency spans and an offline test suite with fake service transports
+- Structured latency spans with a `friday stats` percentile report, and an offline test suite with fake service transports
 
 ## Quickstart
 
@@ -64,6 +64,7 @@ uv run friday ask "what branch am I on"
 uv run friday ask --speak "what is running"
 uv run friday say "the build is green"
 uv run friday hear --seconds 20
+uv run friday stats --kind reasoning --last 50
 uv run friday logs -f
 uv run friday update
 uv run friday stop
@@ -169,6 +170,10 @@ deploy/          systemd user-service template
 | `FRIDAY_INDICATOR` | Terminal speaking-state indicator | `1` |
 | `FRIDAY_LOG` | Runtime log level | `info` |
 | `FRIDAY_AUTO_APPROVE` | Run recognized machine-changing and destructive tools without prompting (`1`/`0`). With `0`, the foreground daemon asks on the terminal and the systemd service denies them, since it has no terminal | `1` |
+| `FRIDAY_STT_MODEL` | Deepgram Flux model; use `flux-general-en` for English-only speech | `flux-general-multi` |
+| `FRIDAY_STT_KEYTERMS` | Comma-separated vocabulary to bias recognition toward (project names, tool names) | unset |
+| `FRIDAY_TTS_VOICE` | Deepgram Aura voice model | `aura-2-asteria-en` |
+| `FRIDAY_SCREENSHOT` | Allow the `screenshot` tool to send the display to Claude for "what am I looking at" turns (`1`/`0`) | `1` |
 | `FRIDAY_VAD_PAUSE_MS` | Local silence before entering possible-end state | `400` |
 | `FRIDAY_ENDPOINT_FAST_MS` | Total silence fallback for short complete commands | `650` |
 | `FRIDAY_ENDPOINT_PATIENT_MS` | Total silence fallback for long or incomplete speech | `1800` |
@@ -195,7 +200,7 @@ External services are injected behind transport interfaces, so the automated sui
 ## Known limitations
 
 - No bundled custom “Friday” wake model yet; the default wake phrase is “alexa”.
-- Focused-window detection is unavailable on KDE Wayland.
+- Focused-window detection is unavailable on KDE Wayland; screen questions go through the `screenshot` tool instead.
 - Dynamic TTS requires Deepgram; only acknowledgement clips are local.
 - Playback interruption is wake-word based, not full duplex.
 - Echo-cancellation attenuation still needs a controlled hardware measurement.

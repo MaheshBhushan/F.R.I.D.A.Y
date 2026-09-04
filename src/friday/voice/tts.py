@@ -67,6 +67,14 @@ class SynthesisTransport(Protocol):
     def synthesize(self, text: str) -> AsyncIterator[bytes]: ...
 
 
+DEFAULT_TTS_VOICE = "aura-2-asteria-en"
+
+
+def env_tts_options() -> dict:
+    """FRIDAY_TTS_VOICE selects the Aura voice model (e.g. aura-2-thalia-en)."""
+    return {"model": os.environ.get("FRIDAY_TTS_VOICE", DEFAULT_TTS_VOICE).strip() or DEFAULT_TTS_VOICE}
+
+
 class DeepgramSpeakTransport:
     """Real transport: wraps deepgram-sdk's AsyncDeepgramClient.speak.v1.connect
     (a persistent websocket; each `synthesize()` call sends one Speak + Flush
@@ -76,7 +84,7 @@ class DeepgramSpeakTransport:
         self,
         api_key: str,
         *,
-        model: str = "aura-2-asteria-en",
+        model: str = DEFAULT_TTS_VOICE,
         sample_rate: int = SAMPLE_RATE,
         encoding: str = "linear16",
         extra_config: Optional[dict] = None,

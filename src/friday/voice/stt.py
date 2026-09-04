@@ -320,6 +320,27 @@ class Transport(Protocol):
     def __aiter__(self) -> AsyncIterator[TranscriptEvent]: ...
 
 
+DEFAULT_STT_MODEL = "flux-general-multi"
+
+
+def env_stt_options() -> dict:
+    """Deepgram Flux options from the environment.
+
+    FRIDAY_STT_MODEL     -- e.g. `flux-general-en` if you only ever speak English
+                            to her; the multilingual model spends capacity on
+                            language identification you do not need.
+    FRIDAY_STT_KEYTERMS  -- comma-separated vocabulary to bias recognition
+                            toward (project names, `tmux`, `pacman`, `Hermes`).
+                            Flux accepts these as `keyterm`.
+    """
+    options: dict = {"model": os.environ.get("FRIDAY_STT_MODEL", DEFAULT_STT_MODEL).strip() or DEFAULT_STT_MODEL}
+    raw = os.environ.get("FRIDAY_STT_KEYTERMS", "")
+    keyterms = [t.strip() for t in raw.split(",") if t.strip()]
+    if keyterms:
+        options["keyterm"] = keyterms
+    return options
+
+
 class DeepgramTransport:
     """Real transport: wraps Deepgram Flux via the v2 streaming endpoint."""
 
@@ -327,7 +348,7 @@ class DeepgramTransport:
         self,
         api_key: str,
         *,
-        model: str = "flux-general-multi",
+        model: str = DEFAULT_STT_MODEL,
         sample_rate: int = SAMPLE_RATE,
         eot_timeout_ms: int = DEFAULT_EOT_TIMEOUT_MS,
         eot_threshold: float = DEFAULT_EOT_THRESHOLD,
