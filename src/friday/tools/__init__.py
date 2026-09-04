@@ -24,6 +24,9 @@ from typing import Awaitable, Callable, Optional
 from friday import agents as coding_agents
 from friday.permissions import RISK, ApprovalCallback, PermissionDenied, Risk, authorize
 from friday.tools.sanitize import safe_argv, safe_path
+# Imported as a module, not `from ... import screenshot`: the function
+# would shadow the `friday.tools.screenshot` submodule attribute.
+from friday.tools import screenshot as _screenshot
 from friday.tools.websearch import web_search
 
 # T9: coding-agent delegation runs real processes in tmux panes, so it sits
@@ -51,6 +54,12 @@ RISK.update(
 # not by an approval prompt (a voice assistant that confirms every search is
 # useless).
 RISK.update({"web_search": Risk.READ_ONLY})
+
+# screenshot reads the display and ships it to the model. Nothing on the
+# machine changes -> READ_ONLY. The privacy question is answered by the tool
+# description (only for questions about the screen) and FRIDAY_SCREENSHOT=0,
+# not by a per-call prompt.
+RISK.update({"screenshot": Risk.READ_ONLY})
 
 _UNIT_RE = re.compile(r"^[A-Za-z0-9_.@-]{1,128}$")
 
@@ -202,6 +211,7 @@ TOOLS: dict[str, Callable[..., Awaitable[str]]] = {
     "check_agent_status": check_agent_status,
     "stop_coding_agent": stop_coding_agent,
     "web_search": web_search,
+    "screenshot": _screenshot.screenshot,
 }
 
 # Order is load-bearing: `tools` is rendered before `system` and sits inside
@@ -343,6 +353,7 @@ TOOL_SPECS: list[dict] = [
             "required": ["query"],
         },
     },
+    _screenshot.SPEC,
 ]
 
 
@@ -352,7 +363,9 @@ class ToolOutcome:
 
     tool_use_id: str
     name: str
-    content: str
+    # A string, or a list of content blocks (text/image) for tools whose
+    # result is not text -- `screenshot` returns an image block.
+    content: "str | list[dict]"
     is_error: bool = False
 
     def to_result_block(self) -> dict:
@@ -370,7 +383,7 @@ async def execute(
     arguments: dict,
     *,
     approve: Optional[ApprovalCallback] = None,
-    registry: Optional[dict[str, Callable[..., Awaitable[str]]]] = None,
+    registry: Optional[dict[str, Callable[..., Awaitable["str | list[dict]"]]]] = None,
 ) -> ToolOutcome:
     """Authorize, then run, one tool call. Denials and tool errors both come
     back as `is_error` outcomes so the model can see and recover from them --
