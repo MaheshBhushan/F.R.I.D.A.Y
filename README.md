@@ -169,6 +169,15 @@ deploy/          systemd user-service template
 | `FRIDAY_INDICATOR` | Terminal speaking-state indicator | `1` |
 | `FRIDAY_LOG` | Runtime log level | `info` |
 | `FRIDAY_AUTO_APPROVE` | Run recognized machine-changing and destructive tools without prompting (`1`/`0`) | `1` |
+| `FRIDAY_VAD_PAUSE_MS` | Local silence before entering possible-end state | `400` |
+| `FRIDAY_ENDPOINT_FAST_MS` | Total silence fallback for short complete commands | `650` |
+| `FRIDAY_ENDPOINT_PATIENT_MS` | Total silence fallback for long or incomplete speech | `1800` |
+| `FRIDAY_ENDPOINT_MAX_MS` | Absolute local endpointing ceiling | `2500` |
+
+Endpoint values must satisfy `0 < VAD pause <= fast < patient <= max`; FRIDAY
+fails clearly during startup if they do not. Use `friday endpoint-test` with the
+daemon stopped to inspect live pause/resume and endpoint timing without calling
+Claude.
 
 ## Verification
 

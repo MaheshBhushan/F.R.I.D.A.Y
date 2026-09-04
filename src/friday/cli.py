@@ -33,7 +33,13 @@ from typing import Optional
 
 from friday import daemon
 
-GREEN, RED, YELLOW, DIM, RESET = "\033[32m", "\033[31m", "\033[33m", "\033[2m", "\033[0m"
+GREEN, RED, YELLOW, DIM, RESET = (
+    "\033[32m",
+    "\033[31m",
+    "\033[33m",
+    "\033[2m",
+    "\033[0m",
+)
 
 
 def _colour(enabled: bool):
@@ -55,18 +61,19 @@ def _mark(good: Optional[bool]) -> str:
 
 # --------------------------------------------------------------- lifecycle
 
+
 def cmd_start(args: argparse.Namespace) -> int:
     if args.foreground:
         # Run in-process: no detach, no pidfile, Ctrl-C stops it. This is the
         # form to use when debugging, because the log goes to the terminal
         # instead of into a file you then have to go and read.
         from friday.core.app import main as app_main
+
         return app_main([])
 
     existing = daemon.status()
     if existing.running:
-        print(f"{_mark(True)} already running "
-              f"(pid {existing.pid}, {existing.supervisor.value})")
+        print(f"{_mark(True)} already running (pid {existing.pid}, {existing.supervisor.value})")
         # Attach anyway. "already running" plus a silent prompt is a dead end;
         # what the user wanted was to watch her, and she is watchable.
         return _attach() if not getattr(args, "detach", False) else 0
@@ -75,8 +82,10 @@ def cmd_start(args: argparse.Namespace) -> int:
     result = daemon.start(timeout=args.timeout)
     if result.healthy:
         info = result.health or {}
-        print(f"{_mark(True)} friday is up (pid {result.pid}, "
-              f"{result.supervisor.value}) — state={info.get('state', '?')}")
+        print(
+            f"{_mark(True)} friday is up (pid {result.pid}, "
+            f"{result.supervisor.value}) — state={info.get('state', '?')}"
+        )
         # Attach after the health check, not instead of it: following a log
         # that never appears because startup failed is the least useful thing
         # this command could do.
@@ -85,10 +94,10 @@ def cmd_start(args: argparse.Namespace) -> int:
         # Up but not answering. Distinguished from "failed to start" because
         # the remedy is different: this one wants the log, not a retry.
         print(f"{_mark(None)} started but not healthy: {result.detail}")
-        print(f"  logs: friday logs -n 40")
+        print("  logs: friday logs -n 40")
         return 3
     print(f"{_mark(False)} failed to start: {result.detail}")
-    print(f"  logs: friday logs -n 40")
+    print("  logs: friday logs -n 40")
     return 1
 
 
@@ -108,20 +117,22 @@ def cmd_restart(args: argparse.Namespace) -> int:
 
 
 def _update_run(command: list[str], root: Path) -> subprocess.CompletedProcess:
-    return subprocess.run(command, cwd=root, capture_output=True, text=True,
-                          timeout=300, check=False)
+    return subprocess.run(
+        command, cwd=root, capture_output=True, text=True, timeout=300, check=False
+    )
 
 
 def cmd_update(args: argparse.Namespace) -> int:
     """Fast-forward the checkout, sync locked dependencies, and restart."""
     root = Path(__file__).resolve().parents[2]
     if not (root / ".git").is_dir():
-        print(f"{_mark(False)} update requires a git checkout: {root}",
-              file=sys.stderr)
+        print(f"{_mark(False)} update requires a git checkout: {root}", file=sys.stderr)
         return 1
     if shutil.which("uv") is None:
-        print(f"{_mark(False)} uv is required to update dependencies safely",
-              file=sys.stderr)
+        print(
+            f"{_mark(False)} uv is required to update dependencies safely",
+            file=sys.stderr,
+        )
         return 1
 
     try:
@@ -133,13 +144,17 @@ def cmd_update(args: argparse.Namespace) -> int:
         print(f"{_mark(False)} git status failed: {dirty.stderr.strip()}", file=sys.stderr)
         return 1
     if dirty.stdout.strip():
-        print(f"{_mark(False)} checkout has uncommitted changes; commit or stash them first",
-              file=sys.stderr)
+        print(
+            f"{_mark(False)} checkout has uncommitted changes; commit or stash them first",
+            file=sys.stderr,
+        )
         return 2
 
     was_running = daemon.status().running
-    for command, label in ((["git", "pull", "--ff-only"], "git pull"),
-                           (["uv", "sync", "--frozen"], "dependency sync")):
+    for command, label in (
+        (["git", "pull", "--ff-only"], "git pull"),
+        (["uv", "sync", "--frozen"], "dependency sync"),
+    ):
         try:
             result = _update_run(command, root)
         except (OSError, subprocess.SubprocessError) as exc:
@@ -148,15 +163,19 @@ def cmd_update(args: argparse.Namespace) -> int:
         if result.stdout.strip():
             print(result.stdout.strip())
         if result.returncode != 0:
-            print(f"{_mark(False)} {label} failed: {result.stderr.strip()}",
-                  file=sys.stderr)
+            print(
+                f"{_mark(False)} {label} failed: {result.stderr.strip()}",
+                file=sys.stderr,
+            )
             return 1
 
     if was_running:
         restarted = daemon.restart()
         if not restarted.healthy:
-            print(f"{_mark(False)} updated, but restart failed: {restarted.detail}",
-                  file=sys.stderr)
+            print(
+                f"{_mark(False)} updated, but restart failed: {restarted.detail}",
+                file=sys.stderr,
+            )
             return 1
         print(f"{_mark(True)} updated and restarted (pid {restarted.pid})")
     else:
@@ -167,16 +186,25 @@ def cmd_update(args: argparse.Namespace) -> int:
 def cmd_status(args: argparse.Namespace) -> int:
     st = daemon.status()
     if args.json:
-        print(json.dumps({
-            "running": st.running, "healthy": st.healthy, "pid": st.pid,
-            "supervisor": st.supervisor.value, "detail": st.detail,
-            "health": st.health,
-        }, indent=2))
+        print(
+            json.dumps(
+                {
+                    "running": st.running,
+                    "healthy": st.healthy,
+                    "pid": st.pid,
+                    "supervisor": st.supervisor.value,
+                    "detail": st.detail,
+                    "health": st.health,
+                },
+                indent=2,
+            )
+        )
         return 0 if st.healthy else 1
 
-    print(f"{_mark(st.healthy or None if st.running else False)} "
-          f"friday: {st.detail}"
-          + (f" (pid {st.pid})" if st.pid else ""))
+    print(
+        f"{_mark(st.healthy or None if st.running else False)} "
+        f"friday: {st.detail}" + (f" (pid {st.pid})" if st.pid else "")
+    )
     print(f"  supervisor  {st.supervisor.value}")
     info = st.health
     if not info:
@@ -187,8 +215,10 @@ def cmd_status(args: argparse.Namespace) -> int:
     print(f"  state       {info.get('state', '?')}")
     print(f"  uptime      {info.get('uptime_s', 0):.0f}s")
     print(f"  voice loop  {'up' if info.get('voice_loop') else 'DOWN'}")
-    print(f"  turns       {info.get('turns', 0)}"
-          + (f" ({info['invalidated']} preempted)" if info.get("invalidated") else ""))
+    print(
+        f"  turns       {info.get('turns', 0)}"
+        + (f" ({info['invalidated']} preempted)" if info.get("invalidated") else "")
+    )
     print(f"  clients     {info.get('clients', 0)}")
 
     # Mic ownership is the thing most likely to explain "why isn't she
@@ -196,8 +226,10 @@ def cmd_status(args: argparse.Namespace) -> int:
     mic = _call("state")
     if mic:
         detail = mic.get("mic_detail") or ""
-        print(f"  mic         {mic.get('mic', '?')}"
-              + (f" — {detail}" if detail and detail != "microphone free" else ""))
+        print(
+            f"  mic         {mic.get('mic', '?')}"
+            + (f" — {detail}" if detail and detail != "microphone free" else "")
+        )
     return 0 if st.healthy else 1
 
 
@@ -205,8 +237,16 @@ def _log_command(*, follow: bool, lines: int) -> Optional[list]:
     """The command that emits the active supervisor's log, or None if there
     is no log to read yet."""
     if daemon.supervisor() is daemon.Supervisor.SYSTEMD:
-        cmd = ["journalctl", "--user", "-u", daemon.UNIT_NAME,
-               "-n", str(lines), "-o", "cat"]
+        cmd = [
+            "journalctl",
+            "--user",
+            "-u",
+            daemon.UNIT_NAME,
+            "-n",
+            str(lines),
+            "-o",
+            "cat",
+        ]
         return [*cmd, "-f"] if follow else cmd
 
     if not daemon.LOG_PATH.exists():
@@ -239,8 +279,7 @@ def _tail(*, follow: bool, lines: int) -> int:
         # the middle of a pipeline it adds nothing to.
         return subprocess.call(cmd)
 
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, text=True,
-                            errors="replace", bufsize=1)
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, text=True, errors="replace", bufsize=1)
     try:
         logfmt.stream_lines(proc.stdout, color=True)
         return proc.wait()
@@ -260,8 +299,10 @@ def _attach(lines: int = 12) -> int:
     the gateway bound, whether the voice loop came up) has already scrolled
     past into the journal.
     """
-    print(f"{DIM if _tty() else ''}— streaming; Ctrl-C detaches "
-          f"(she keeps running){RESET if _tty() else ''}")
+    print(
+        f"{DIM if _tty() else ''}— streaming; Ctrl-C detaches "
+        f"(she keeps running){RESET if _tty() else ''}"
+    )
     try:
         return _tail(follow=True, lines=lines)
     except KeyboardInterrupt:
@@ -285,8 +326,7 @@ def cmd_reap(args: argparse.Namespace) -> int:
     """
     freed = daemon.reap_echo_cancel()
     if freed:
-        print(f"{_mark(True)} freed {freed} leaked echo-cancel module"
-              f"{'s' if freed != 1 else ''}")
+        print(f"{_mark(True)} freed {freed} leaked echo-cancel module{'s' if freed != 1 else ''}")
     elif not getattr(args, "quiet", False):
         print(f"{_mark(True)} nothing to reap")
     return 0
@@ -302,8 +342,7 @@ def cmd_hear(args: argparse.Namespace) -> int:
     threshold = args.threshold if args.threshold is not None else wake.DEFAULT_THRESHOLD
     try:
         models = tuple(args.model) if getattr(args, "model", None) else None
-        return asyncio.run(wake.probe(seconds=args.seconds,
-                                      threshold=threshold, models=models))
+        return asyncio.run(wake.probe(seconds=args.seconds, threshold=threshold, models=models))
     except KeyboardInterrupt:
         return 0
     except Exception as exc:  # noqa: BLE001
@@ -311,10 +350,28 @@ def cmd_hear(args: argparse.Namespace) -> int:
         return 1
 
 
+def cmd_endpoint_test(args: argparse.Namespace) -> int:
+    """Run one live STT/VAD/Flux turn without routing or Claude."""
+    if daemon.status().running:
+        print(
+            f"{_mark(False)} stop FRIDAY first so the diagnostic owns the microphone: friday stop",
+            file=sys.stderr,
+        )
+        return 2
+    from friday.voice.stt import endpoint_probe
+
+    os.environ["FRIDAY_LOG"] = "debug"
+    try:
+        return asyncio.run(endpoint_probe())
+    except Exception as exc:  # noqa: BLE001
+        print(f"{_mark(False)} endpoint test failed: {exc}", file=sys.stderr)
+        return 1
+
+
 # ------------------------------------------------------------- interaction
 
-def _call(method: str, params: Optional[dict] = None,
-          timeout: float = 120.0) -> Optional[dict]:
+
+def _call(method: str, params: Optional[dict] = None, timeout: float = 120.0) -> Optional[dict]:
     """One gateway call. None on any failure -- callers report their own errors."""
     from friday.gateway.client import GatewayClient
 
@@ -326,8 +383,7 @@ def _call(method: str, params: Optional[dict] = None,
             if not reply.get("ok"):
                 return None
             reply = await client.request(method, params or {}, timeout=timeout)
-            return reply.get("result") if reply.get("ok") else \
-                {"__error__": reply.get("error", {})}
+            return reply.get("result") if reply.get("ok") else {"__error__": reply.get("error", {})}
         except Exception:  # noqa: BLE001
             return None
         finally:
@@ -342,8 +398,10 @@ def _call(method: str, params: Optional[dict] = None,
 def _require_running() -> bool:
     if daemon.status().running:
         return True
-    print(f"{_mark(False)} friday is not running — start her with: friday start",
-          file=sys.stderr)
+    print(
+        f"{_mark(False)} friday is not running — start her with: friday start",
+        file=sys.stderr,
+    )
     return False
 
 
@@ -362,8 +420,7 @@ def cmd_ask(args: argparse.Namespace) -> int:
         print(f"{_mark(False)} {result['error']}", file=sys.stderr)
         return 1
     tier = result.get("tier") or "?"
-    print(f"{DIM if _tty() else ''}[{tier}]{RESET if _tty() else ''} "
-          f"{result.get('reply', '')}")
+    print(f"{DIM if _tty() else ''}[{tier}]{RESET if _tty() else ''} {result.get('reply', '')}")
     return 0
 
 
@@ -386,10 +443,12 @@ def cmd_say(args: argparse.Namespace) -> int:
 
 def cmd_smoke(args: argparse.Namespace) -> int:
     from friday.gateway.client import smoke
+
     return asyncio.run(smoke(args.url, None, ask=args.ask, wait=args.wait))
 
 
 # ------------------------------------------------------------------ doctor
+
 
 def cmd_doctor(args: argparse.Namespace) -> int:
     """Check the things that actually break, in the order they break.
@@ -406,8 +465,10 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         nonlocal problems
         if good is False:
             problems += 1
-        print(f"  {_mark(good)} {label}" + (f"  {DIM if _tty() else ''}{note}"
-                                            f"{RESET if _tty() else ''}" if note else ""))
+        print(
+            f"  {_mark(good)} {label}"
+            + (f"  {DIM if _tty() else ''}{note}{RESET if _tty() else ''}" if note else "")
+        )
 
     print("credentials")
     env_file = Path.home() / ".friday" / "env"
@@ -417,16 +478,21 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         check("~/.friday/env is 0600", mode == 0o600, f"mode {mode:o}")
     for key in ("DEEPGRAM_API_KEY", "ANTHROPIC_API_KEY"):
         present = bool(os.environ.get(key))
-        check(f"{key} in this shell", present or None,
-              "" if present else "not exported here (the daemon reads the env file)")
+        check(
+            f"{key} in this shell",
+            present or None,
+            "" if present else "not exported here (the daemon reads the env file)",
+        )
 
     print("audio")
     default_source = _run_ok(["pactl", "get-default-source"])
     check("pipewire answers", default_source is not None)
     if default_source:
-        check("default source is a real input",
-              "monitor" not in default_source,
-              default_source.split(".")[-1] if default_source else "")
+        check(
+            "default source is a real input",
+            "monitor" not in default_source,
+            default_source.split(".")[-1] if default_source else "",
+        )
         muted = _run_ok(["pactl", "get-source-mute", default_source])
         check("default source unmuted", muted == "Mute: no", muted or "")
     # Counted in Python, not with `grep -c`: grep exits 1 when the count is
@@ -440,18 +506,25 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     # running -- flagging her own working module would train the user to ignore
     # this line, which is worse than not checking at all.
     if st.running:
-        check("echo-cancel module", None if loaded else True,
-              "loaded on demand by friday (expected)" if loaded
-              else "not currently needed")
+        check(
+            "echo-cancel module",
+            None if loaded else True,
+            "loaded on demand by friday (expected)" if loaded else "not currently needed",
+        )
     else:
-        check("no leaked echo-cancel module", not loaded,
-              "" if not loaded
-              else "friday is stopped, so this is a leak — unload it: "
-                   "pactl unload-module module-echo-cancel")
+        check(
+            "no leaked echo-cancel module",
+            not loaded,
+            ""
+            if not loaded
+            else "friday is stopped, so this is a leak — unload it: "
+            "pactl unload-module module-echo-cancel",
+        )
 
     print("gateway")
-    token = Path(os.environ.get("FRIDAY_GATEWAY_TOKEN_FILE",
-                                Path.home() / ".friday" / "gateway-token"))
+    token = Path(
+        os.environ.get("FRIDAY_GATEWAY_TOKEN_FILE", Path.home() / ".friday" / "gateway-token")
+    )
     if token.exists():
         mode = token.stat().st_mode & 0o777
         check("token file is 0600", mode == 0o600, f"mode {mode:o}")
@@ -459,18 +532,29 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         check("token file", None, "not created yet (minted on first start)")
     check("daemon running", st.running or None, st.detail)
     if st.running:
-        check("gateway healthy", st.healthy,
-              "" if st.healthy else "up but not answering; see: friday logs")
+        check(
+            "gateway healthy",
+            st.healthy,
+            "" if st.healthy else "up but not answering; see: friday logs",
+        )
         if st.health:
-            check("voice loop up", bool(st.health.get("voice_loop")),
-                  "" if st.health.get("voice_loop") else
-                  "usually a missing credential; see: friday logs")
+            check(
+                "voice loop up",
+                bool(st.health.get("voice_loop")),
+                ""
+                if st.health.get("voice_loop")
+                else "usually a missing credential; see: friday logs",
+            )
 
     print("supervisor")
     who = daemon.supervisor()
-    check(f"managed by {who.value}", None,
-          "install the unit with: friday install"
-          if who is daemon.Supervisor.DIRECT else daemon.UNIT_NAME)
+    check(
+        f"managed by {who.value}",
+        None,
+        "install the unit with: friday install"
+        if who is daemon.Supervisor.DIRECT
+        else daemon.UNIT_NAME,
+    )
 
     print()
     if problems:
@@ -482,14 +566,14 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
 def _run_ok(cmd: list[str]) -> Optional[str]:
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True,
-                                timeout=5.0, check=False)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=5.0, check=False)
     except (OSError, subprocess.SubprocessError):
         return None
     return result.stdout.strip() if result.returncode == 0 else None
 
 
 # ----------------------------------------------------------------- install
+
 
 def cmd_install(args: argparse.Namespace) -> int:
     source = Path(__file__).resolve().parent.parent.parent / "deploy" / "friday.service"
@@ -505,8 +589,7 @@ def cmd_install(args: argparse.Namespace) -> int:
         ok, note = daemon.stop()
         print(f"{_mark(ok)} stopped the direct-mode daemon first ({note})")
         if not ok:
-            print("  refusing to install while it is still running",
-                  file=sys.stderr)
+            print("  refusing to install while it is still running", file=sys.stderr)
             return 1
 
     target_dir = Path.home() / ".config" / "systemd" / "user"
@@ -520,8 +603,7 @@ def cmd_install(args: argparse.Namespace) -> int:
     if args.now:
         # enable --now both starts it and makes it survive a reboot. Doing one
         # without the other is the classic "it worked until I rebooted".
-        code = subprocess.call(["systemctl", "--user", "enable", "--now",
-                                daemon.UNIT_NAME])
+        code = subprocess.call(["systemctl", "--user", "enable", "--now", daemon.UNIT_NAME])
         if code != 0:
             print(f"{_mark(False)} enable failed; try: friday logs", file=sys.stderr)
             return code
@@ -560,6 +642,7 @@ def cmd_token(args: argparse.Namespace) -> int:
 
 # -------------------------------------------------------------------- parser
 
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="friday",
@@ -569,14 +652,22 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     p = sub.add_parser("start", help="start the daemon")
-    p.add_argument("--foreground", "-f", action="store_true",
-                   help="run in this terminal instead of detaching")
+    p.add_argument(
+        "--foreground",
+        "-f",
+        action="store_true",
+        help="run in this terminal instead of detaching",
+    )
     p.add_argument("--timeout", type=float, default=daemon.START_TIMEOUT_S)
     # Streaming is the default. Starting a voice assistant and being handed
     # back a silent prompt tells you nothing about whether she can hear you;
     # the log is the only feedback there is. Ctrl-C detaches, it does not stop.
-    p.add_argument("--detach", "-d", action="store_true",
-                   help="start and return to the prompt instead of streaming")
+    p.add_argument(
+        "--detach",
+        "-d",
+        action="store_true",
+        help="start and return to the prompt instead of streaming",
+    )
     p.set_defaults(func=cmd_start)
 
     p = sub.add_parser("stop", help="stop the daemon")
@@ -585,8 +676,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("restart", help="stop then start")
     p.add_argument("--timeout", type=float, default=daemon.START_TIMEOUT_S)
-    p.add_argument("--detach", "-d", action="store_true",
-                   help="return to the prompt instead of streaming")
+    p.add_argument(
+        "--detach",
+        "-d",
+        action="store_true",
+        help="return to the prompt instead of streaming",
+    )
     p.set_defaults(func=cmd_restart)
 
     p = sub.add_parser("update", help="pull updates, sync dependencies, and restart")
@@ -611,11 +706,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=cmd_say)
 
     p = sub.add_parser("smoke", help="staged health check")
-    p.add_argument("--url", default=os.environ.get("FRIDAY_GATEWAY_URL",
-                                                   "ws://127.0.0.1:8765"))
+    p.add_argument("--url", default=os.environ.get("FRIDAY_GATEWAY_URL", "ws://127.0.0.1:8765"))
     p.add_argument("--ask", metavar="TEXT")
-    p.add_argument("--wait", type=float, default=0.0, metavar="SECONDS",
-                   help="poll for the gateway to come up first")
+    p.add_argument(
+        "--wait",
+        type=float,
+        default=0.0,
+        metavar="SECONDS",
+        help="poll for the gateway to come up first",
+    )
     p.set_defaults(func=cmd_smoke)
 
     p = sub.add_parser("doctor", help="check the things that actually break")
@@ -635,10 +734,17 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("hear", help="live mic probe: input level + wake score")
     p.add_argument("--seconds", type=float, default=20.0)
     p.add_argument("--threshold", type=float, default=None)
-    p.add_argument("--model", action="append", metavar="NAME_OR_PATH",
-                   help="wake model to test (repeatable); a path works too, so "
-                        "a freshly trained model can be tried before install")
+    p.add_argument(
+        "--model",
+        action="append",
+        metavar="NAME_OR_PATH",
+        help="wake model to test (repeatable); a path works too, so "
+        "a freshly trained model can be tried before install",
+    )
     p.set_defaults(func=cmd_hear)
+
+    p = sub.add_parser("endpoint-test", help="diagnose one VAD/Flux turn without Claude")
+    p.set_defaults(func=cmd_endpoint_test)
 
     p = sub.add_parser("token", help="print the gateway token")
     p.add_argument("--rotate", action="store_true")

@@ -13,6 +13,7 @@ arguments are sanitised inside each tool by `friday.tools.sanitize`.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
 import re
 import shlex
@@ -71,7 +72,12 @@ async def _run(argv: list[str], timeout: float = COMMAND_TIMEOUT) -> str:
     )
     try:
         out, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout)
-    except asyncio.TimeoutError:
+    except asyncio.CancelledError:
+        proc.kill()
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(proc.communicate(), timeout=1.0)
+        raise
+    except TimeoutError:
         proc.kill()
         return f"[timed out after {timeout}s]"
     return _clip(out.decode(errors="replace"))
@@ -204,11 +210,14 @@ TOOL_SPECS: list[dict] = [
     {
         "name": "read_file",
         "description": "Read a text file from disk. Confined to the user's home, "
-                       "/var/log, /proc, /sys and /tmp; credential files are refused.",
+        "/var/log, /proc, /sys and /tmp; credential files are refused.",
         "input_schema": {
             "type": "object",
             "properties": {
-                "path": {"type": "string", "description": "Absolute or ~-relative path."},
+                "path": {
+                    "type": "string",
+                    "description": "Absolute or ~-relative path.",
+                },
                 "max_lines": {"type": "integer", "description": "Max lines to read."},
             },
             "required": ["path"],
@@ -229,15 +238,18 @@ TOOL_SPECS: list[dict] = [
             "type": "object",
             "properties": {
                 "unit": {"type": "string", "description": "systemd unit name."},
-                "lines": {"type": "integer", "description": "How many lines (max 200)."},
+                "lines": {
+                    "type": "integer",
+                    "description": "How many lines (max 200).",
+                },
             },
         },
     },
     {
         "name": "run_readonly_command",
         "description": "Run one read-only shell command (ls, ps, df, free, uptime, "
-                       "uname, git status/log/diff, systemctl status, ...). No pipes, "
-                       "redirection, or command substitution.",
+        "uname, git status/log/diff, systemctl status, ...). No pipes, "
+        "redirection, or command substitution.",
         "input_schema": {
             "type": "object",
             "properties": {"command": {"type": "string"}},
@@ -274,14 +286,23 @@ TOOL_SPECS: list[dict] = [
     {
         "name": "delegate_coding_agent",
         "description": "Spawn a coding agent (e.g. `claude`, `codex`) in a new tmux "
-                       "session and hand it a task command. The user can `tmux -L friday attach -t "
-                       "<session>` at any time to watch or take over.",
+        "session and hand it a task command. The user can `tmux -L friday attach -t "
+        "<session>` at any time to watch or take over.",
         "input_schema": {
             "type": "object",
             "properties": {
-                "command": {"type": "string", "description": "Command + args to run in the pane."},
-                "cwd": {"type": "string", "description": "Working directory for the agent."},
-                "label": {"type": "string", "description": "Short label used in the session name."},
+                "command": {
+                    "type": "string",
+                    "description": "Command + args to run in the pane.",
+                },
+                "cwd": {
+                    "type": "string",
+                    "description": "Working directory for the agent.",
+                },
+                "label": {
+                    "type": "string",
+                    "description": "Short label used in the session name.",
+                },
             },
             "required": ["command", "cwd"],
         },
@@ -289,7 +310,7 @@ TOOL_SPECS: list[dict] = [
     {
         "name": "check_agent_status",
         "description": "Capture a friday-owned coding-agent tmux session's pane and "
-                       "classify it as running, idle, or waiting for approval.",
+        "classify it as running, idle, or waiting for approval.",
         "input_schema": {
             "type": "object",
             "properties": {"session": {"type": "string"}},
@@ -308,13 +329,16 @@ TOOL_SPECS: list[dict] = [
     {
         "name": "web_search",
         "description": "Search the web via Exa and get back a short ranked list of "
-                       "titles, URLs and snippets. Refuses queries that look like "
-                       "credentials or local data rather than a search phrase.",
+        "titles, URLs and snippets. Refuses queries that look like "
+        "credentials or local data rather than a search phrase.",
         "input_schema": {
             "type": "object",
             "properties": {
                 "query": {"type": "string", "description": "The search phrase."},
-                "num_results": {"type": "integer", "description": "How many results (max 10)."},
+                "num_results": {
+                    "type": "integer",
+                    "description": "How many results (max 10).",
+                },
             },
             "required": ["query"],
         },

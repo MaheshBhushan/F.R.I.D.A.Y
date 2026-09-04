@@ -1,12 +1,10 @@
-"""Deepgram streaming STT: replay wake.py's pre-roll + live audio, surface interim
-and final transcripts, and close the turn on local VAD independent of the network.
+"""Deepgram streaming STT with adaptive conversational endpointing.
 
 Consumes AudioCaptureService subscriptions (with the legacy `WakeDetection`
 handoff retained for file/tests) and streams them to Deepgram's Flux v2 socket,
-while a local webrtcvad-based detector marks speech-end from
-raw audio alone. The turn closes on agreement between local VAD and Flux's own
-EndOfTurn signal, capped at MAX_WAIT_MS so a flaky connection can
-never stall the turn indefinitely.
+while a local webrtcvad-based detector supplies speech activity. Flux EndOfTurn
+is authoritative; bounded adaptive deadlines are the fallback when Flux does
+not decide. A local pause never closes the audio stream by itself.
 """
 
 from __future__ import annotations
@@ -15,13 +13,16 @@ import argparse
 import asyncio
 import contextlib
 import os
+import re
 import sys
 import time
 import wave
 from dataclasses import dataclass
+from enum import Enum
 from typing import Any, AsyncIterator, Callable, Optional, Protocol
 
 from friday.audio.capture import AudioSubscription
+from friday.core import events
 from friday.core.spans import TurnSpan, start_turn
 from friday.voice.wake import CHUNK_SAMPLES, PREROLL_SECONDS, SAMPLE_RATE, WakeDetection
 
@@ -31,14 +32,241 @@ DEFAULT_EOT_TIMEOUT_MS = 60_000
 DEFAULT_EOT_THRESHOLD = 0.9
 WARM_SOCKET_TTL_SECONDS = 120.0
 
-# Max time to wait, after local VAD calls speech-end, for Deepgram to agree before
-# closing the turn on best-available evidence anyway.
-MAX_WAIT_MS = 700
-
 VAD_FRAME_MS = 10
 VAD_FRAME_BYTES = int(SAMPLE_RATE * VAD_FRAME_MS / 1000) * 2  # 320 bytes = 160 samples
-VAD_SILENCE_MS = 400  # trailing silence required before local VAD calls speech-end
 VAD_AGGRESSIVENESS = 2
+FLUSH_WAIT_MS = 200
+
+
+@dataclass(frozen=True)
+class EndpointConfig:
+    vad_pause_ms: int = 400
+    fast_ms: int = 650
+    patient_ms: int = 1800
+    max_ms: int = 2500
+
+    def __post_init__(self) -> None:
+        if not (0 < self.vad_pause_ms <= self.fast_ms < self.patient_ms <= self.max_ms):
+            raise ValueError(
+                "invalid endpoint configuration: require 0 < VAD pause <= fast < patient <= max"
+            )
+
+    @classmethod
+    def from_env(cls) -> "EndpointConfig":
+        names = {
+            "vad_pause_ms": "FRIDAY_VAD_PAUSE_MS",
+            "fast_ms": "FRIDAY_ENDPOINT_FAST_MS",
+            "patient_ms": "FRIDAY_ENDPOINT_PATIENT_MS",
+            "max_ms": "FRIDAY_ENDPOINT_MAX_MS",
+        }
+        values = {}
+        for field, name in names.items():
+            raw = os.environ.get(name)
+            if raw is not None:
+                try:
+                    values[field] = int(raw)
+                except ValueError as exc:
+                    raise ValueError(
+                        f"invalid endpoint configuration: {name} must be an integer"
+                    ) from exc
+        return cls(**values)
+
+
+class EndpointState(Enum):
+    LISTENING = "listening"
+    SPEAKING = "speaking"
+    POSSIBLE_END = "possible_end"
+    WAITING_FOR_EOT = "waiting_for_eot"
+    FINALIZED = "finalized"
+
+
+class SpeechSignal(Enum):
+    NONE = "none"
+    STARTED = "started"
+    PAUSE = "pause"
+    RESUMED = "resumed"
+
+
+@dataclass
+class EndpointStats:
+    resumed_pauses: int = 0
+    longest_pause_ms: int = 0
+    utterance_started_at: Optional[float] = None
+    final_speech_at: Optional[float] = None
+    finalized_at: Optional[float] = None
+
+
+_CONTINUATION_WORDS = frozenset(
+    {
+        "and",
+        "or",
+        "but",
+        "because",
+        "so",
+        "then",
+        "to",
+        "with",
+        "if",
+        "that",
+    }
+)
+_FAST_REFLEXES = frozenset({"stop", "cancel", "yes", "no"})
+_QUESTION_STARTS = frozenset(
+    {
+        "am",
+        "are",
+        "can",
+        "could",
+        "did",
+        "do",
+        "does",
+        "how",
+        "is",
+        "should",
+        "was",
+        "were",
+        "what",
+        "what's",
+        "when",
+        "where",
+        "which",
+        "who",
+        "why",
+        "will",
+        "would",
+    }
+)
+
+
+class EndpointController:
+    """Deterministic fusion of local speech activity and Flux turn events."""
+
+    def __init__(
+        self,
+        config: EndpointConfig,
+        *,
+        clock: Callable[[], float] = time.monotonic,
+        stats: Optional[EndpointStats] = None,
+    ) -> None:
+        self.config = config
+        self.clock = clock
+        self.state = EndpointState.LISTENING
+        self.transcript = ""
+        self.deadline: Optional[float] = None
+        self.absolute_deadline: Optional[float] = None
+        self.pause_started_at: Optional[float] = None
+        self.finalized_reason: Optional[str] = None
+        self.stats = stats or EndpointStats()
+
+    def on_speech(self, signal: SpeechSignal, now: Optional[float] = None) -> Optional[str]:
+        now = self.clock() if now is None else now
+        if self.state is EndpointState.FINALIZED or signal is SpeechSignal.NONE:
+            return self.finalized_reason
+        if signal is SpeechSignal.STARTED:
+            self.stats.utterance_started_at = self.stats.utterance_started_at or now
+            self.state = EndpointState.SPEAKING
+            events.debug("turn", "speech-start")
+        elif signal is SpeechSignal.PAUSE:
+            if self.pause_started_at is not None:
+                return self.finalized_reason
+            self.pause_started_at = now - self.config.vad_pause_ms / 1000
+            self.stats.final_speech_at = self.pause_started_at
+            grace_ms = self.config.fast_ms if self._fast_candidate() else self.config.patient_ms
+            self.deadline = self.pause_started_at + grace_ms / 1000
+            self.absolute_deadline = self.pause_started_at + self.config.max_ms / 1000
+            self.state = EndpointState.POSSIBLE_END
+            events.debug(
+                "turn",
+                "possible-end",
+                silence_ms=self.config.vad_pause_ms,
+                grace_ms=grace_ms,
+            )
+        elif signal is SpeechSignal.RESUMED:
+            if self.pause_started_at is not None:
+                pause_ms = round((now - self.pause_started_at) * 1000)
+                self.stats.resumed_pauses += 1
+                self.stats.longest_pause_ms = max(self.stats.longest_pause_ms, pause_ms)
+                events.debug("turn", "speech-resumed", pause_ms=pause_ms)
+            self.pause_started_at = None
+            self.deadline = None
+            self.absolute_deadline = None
+            self.state = EndpointState.SPEAKING
+        return self.finalized_reason
+
+    def on_flux(self, event: "TranscriptEvent", now: Optional[float] = None) -> Optional[str]:
+        now = self.clock() if now is None else now
+        if event.text.strip():
+            self.transcript = event.text.strip()
+            if self.pause_started_at is not None and self._fast_candidate():
+                self.deadline = min(
+                    self.deadline or float("inf"),
+                    self.pause_started_at + self.config.fast_ms / 1000,
+                )
+        if self.state is EndpointState.FINALIZED:
+            return None
+        if event.turn_event == "StartOfTurn":
+            signal = (
+                SpeechSignal.RESUMED if self.pause_started_at is not None else SpeechSignal.STARTED
+            )
+            return self.on_speech(signal, now)
+        if event.turn_event == "TurnResumed":
+            return self.on_speech(SpeechSignal.RESUMED, now)
+        if event.turn_event == "EagerEndOfTurn" and self.pause_started_at is not None:
+            self.state = EndpointState.WAITING_FOR_EOT
+        if event.turn_event == "EndOfTurn" or event.speech_final:
+            return self.finalize("flux_eot", now)
+        return None
+
+    def on_timeout(self, now: Optional[float] = None) -> Optional[str]:
+        now = self.clock() if now is None else now
+        if self.state is EndpointState.FINALIZED or self.deadline is None:
+            return self.finalized_reason
+        if self.absolute_deadline is not None and now >= self.absolute_deadline:
+            return self.finalize("absolute_timeout", now)
+        if now >= self.deadline:
+            reason = "fast_timeout" if self._fast_candidate() else "patient_timeout"
+            return self.finalize(reason, now)
+        return None
+
+    def finalize(self, reason: str, now: Optional[float] = None) -> str:
+        if self.finalized_reason is not None:
+            return self.finalized_reason
+        now = self.clock() if now is None else now
+        self.finalized_reason = reason
+        self.stats.finalized_at = now
+        self.state = EndpointState.FINALIZED
+        self.deadline = None
+        self.absolute_deadline = None
+        endpoint_ms = (
+            round((now - self.stats.final_speech_at) * 1000)
+            if self.stats.final_speech_at is not None
+            else None
+        )
+        utterance_ms = (
+            round((now - self.stats.utterance_started_at) * 1000)
+            if self.stats.utterance_started_at is not None
+            else None
+        )
+        events.emit(
+            "turn",
+            "finalized",
+            reason=reason,
+            endpoint_ms=endpoint_ms,
+            utterance_ms=utterance_ms,
+            resumed=self.stats.resumed_pauses,
+            longest_pause_ms=self.stats.longest_pause_ms,
+        )
+        return reason
+
+    def _fast_candidate(self) -> bool:
+        words = re.findall(r"[\w']+", self.transcript.lower())
+        if words[:2] == ["hey", "friday"]:
+            words = words[2:]
+        elif words[:1] == ["friday"]:
+            words = words[1:]
+        if not words or len(words) > 8 or words[-1] in _CONTINUATION_WORDS:
+            return False
+        return len(words) == 1 and words[0] in _FAST_REFLEXES or words[0] in _QUESTION_STARTS
 
 
 @dataclass
@@ -49,6 +277,32 @@ class TranscriptEvent:
     is_final: bool
     speech_final: bool = False
     utterance_end: bool = False
+    turn_event: Optional[str] = None
+    eot_confidence: Optional[float] = None
+    hard_stop: bool = False
+
+
+def is_hard_stop_command(text: str) -> bool:
+    """Match only the isolated imperative, never a containing sentence."""
+    words = re.findall(r"[a-z']+", text.lower())
+    return words in (["friday", "stop"], ["hey", "friday", "stop"])
+
+
+class HardStopMatcher:
+    """Require a Flux turn signal or two identical exact streaming updates."""
+
+    def __init__(self) -> None:
+        self._exact_updates = 0
+
+    def feed(self, event: TranscriptEvent) -> bool:
+        if not is_hard_stop_command(event.text):
+            self._exact_updates = 0
+            return False
+        if event.turn_event in {"EagerEndOfTurn", "EndOfTurn"} or event.speech_final:
+            return True
+        if event.turn_event in {None, "Update"}:
+            self._exact_updates += 1
+        return self._exact_updates >= 2
 
 
 class Transport(Protocol):
@@ -123,6 +377,8 @@ class DeepgramTransport:
                     text=message.transcript,
                     is_final=end_of_turn,
                     speech_final=end_of_turn,
+                    turn_event=message.event,
+                    eot_confidence=getattr(message, "end_of_turn_confidence", None),
                 )
             )
 
@@ -196,8 +452,8 @@ class FluxTransportPool:
                 if transport.connected and time.monotonic() - opened_at <= self._ttl:
                     return transport
                 await transport.__aexit__(None, None, None)
-            except Exception:
-                pass
+            except Exception as exc:
+                events.debug("stt-connection", "warm-reuse-failed", error=repr(exc))
         transport = self._transport_factory(self._api_key, **self._config)
         return await transport.__aenter__()
 
@@ -230,32 +486,39 @@ class _FluxLease:
 
 
 class LocalVAD:
-    """webrtcvad-based speech-end detector, independent of any STT transport."""
+    """webrtcvad speech activity detector that preserves pause/resume state."""
 
-    def __init__(self, aggressiveness: int = VAD_AGGRESSIVENESS, silence_ms: int = VAD_SILENCE_MS) -> None:
+    def __init__(self, aggressiveness: int = VAD_AGGRESSIVENESS, silence_ms: int = 400) -> None:
         import webrtcvad
 
         self._vad = webrtcvad.Vad(aggressiveness)
         self._silence_frames_needed = max(1, silence_ms // VAD_FRAME_MS)
         self._silence_run = 0
         self._heard_speech = False
+        self._paused = False
 
-    def feed(self, chunk: bytes) -> bool:
+    def feed(self, chunk: bytes) -> SpeechSignal:
         """Feed one 80ms chunk (split into 10ms sub-frames for webrtcvad).
 
-        Returns True the instant trailing silence >= silence_ms is observed
-        after speech has been heard.
+        Returns only state transitions; quiet frames between transitions are NONE.
         """
+        result = SpeechSignal.NONE
         for i in range(0, len(chunk) - VAD_FRAME_BYTES + 1, VAD_FRAME_BYTES):
             frame = chunk[i : i + VAD_FRAME_BYTES]
             if self._vad.is_speech(frame, SAMPLE_RATE):
+                if not self._heard_speech:
+                    result = SpeechSignal.STARTED
+                elif self._paused:
+                    result = SpeechSignal.RESUMED
                 self._heard_speech = True
+                self._paused = False
                 self._silence_run = 0
             elif self._heard_speech:
                 self._silence_run += 1
-                if self._silence_run >= self._silence_frames_needed:
-                    return True
-        return False
+                if not self._paused and self._silence_run >= self._silence_frames_needed:
+                    self._paused = True
+                    result = SpeechSignal.PAUSE
+        return result
 
 
 async def run_utterance(
@@ -264,24 +527,28 @@ async def run_utterance(
     *,
     span: Optional[TurnSpan] = None,
     vad: Optional[LocalVAD] = None,
-    max_wait_ms: int = MAX_WAIT_MS,
+    endpoint_config: Optional[EndpointConfig] = None,
+    endpoint_stats: Optional[EndpointStats] = None,
+    clock: Callable[[], float] = time.monotonic,
 ) -> AsyncIterator[TranscriptEvent]:
-    """Replay preroll + live audio (gapless) into `transport`, yielding transcript
-    events as they arrive. Local VAD runs on the same audio regardless of whether
-    a transport is present, marking `speech_ended_vad`. The turn closes (marking
-    `stt_final`) on agreement between local VAD and the transport's final/
-    speech_final/utterance_end signal, or after `max_wait_ms` past VAD speech-end,
-    whichever comes first.
+    """Stream one semantic turn, preserving audio through thinking pauses.
+
+    Local VAD changes endpoint state but never closes the stream. Flux EndOfTurn
+    is authoritative; adaptive local deadlines are bounded fallbacks.
 
     `transport`, when given, must already be entered (`async with`); this
     function does not own its lifecycle. Passing an un-entered transport raises
     out of the iterator rather than yielding an empty turn.
     """
-    vad = vad or LocalVAD()
+    config = endpoint_config or EndpointConfig.from_env()
+    vad = vad or LocalVAD(silence_ms=config.vad_pause_ms)
+    endpoint = EndpointController(config, clock=clock, stats=endpoint_stats)
+    hard_stop_matcher = HardStopMatcher()
     out_queue: "asyncio.Queue[Any]" = asyncio.Queue()
-    vad_ended = asyncio.Event()
     audio_done = asyncio.Event()
     got_final = asyncio.Event()
+    finalized = asyncio.Event()
+    state_changed = asyncio.Event()
     pending_audio = False
     flushed = False
     sentinel = object()
@@ -309,14 +576,24 @@ async def run_utterance(
         nonlocal pending_audio
         try:
             async for chunk in audio_source():
-                speech_ended = not vad_ended.is_set() and vad.feed(chunk)
+                raw_signal = vad.feed(chunk)
+                signal = (
+                    raw_signal
+                    if isinstance(raw_signal, SpeechSignal)
+                    else (SpeechSignal.PAUSE if raw_signal else SpeechSignal.NONE)
+                )
                 if transport is not None:
                     await transport.send_media(chunk)
                     pending_audio = True
-                if speech_ended:
-                    vad_ended.set()
+                if signal is not SpeechSignal.NONE:
+                    endpoint.on_speech(signal, clock())
+                    state_changed.set()
+                if signal is SpeechSignal.PAUSE:
                     if span is not None:
                         span.mark("speech_ended_vad")
+                elif signal is SpeechSignal.RESUMED and span is not None:
+                    span.mark("speech_resumed")
+                if finalized.is_set():
                     return
         except asyncio.CancelledError:
             raise
@@ -333,46 +610,69 @@ async def run_utterance(
             return
         try:
             async for event in transport:
+                if hard_stop_matcher.feed(event):
+                    event.hard_stop = True
                 await out_queue.put(event)
-                # `is_final` only finalizes one transcript segment; it is not
-                # an end-of-turn signal. Deepgram may emit an empty/final wake
-                # segment before the command that follows it.
+                if event.hard_stop:
+                    endpoint.finalize("hard_stop", clock())
+                    finalized.set()
+                    return
+                reason = endpoint.on_flux(event, clock())
+                state_changed.set()
                 if event.speech_final or event.utterance_end:
                     got_final.set()
+                if reason is not None:
+                    finalized.set()
                     return
         except asyncio.CancelledError:
             raise
         except Exception as exc:
             await out_queue.put(exc)
 
+    async def endpoint_timer() -> None:
+        while not finalized.is_set():
+            if audio_done.is_set():
+                if span is not None and "speech_ended_vad" not in span.stages:
+                    span.mark("speech_ended_vad")
+                endpoint.finalize("audio_exhausted", clock())
+                finalized.set()
+                return
+            state_changed.clear()
+            deadline = endpoint.deadline
+            if deadline is None:
+                waiters = [
+                    asyncio.create_task(state_changed.wait()),
+                    asyncio.create_task(audio_done.wait()),
+                ]
+                try:
+                    await asyncio.wait(waiters, return_when=asyncio.FIRST_COMPLETED)
+                finally:
+                    for waiter in waiters:
+                        waiter.cancel()
+                continue
+            delay = max(0.0, deadline - clock())
+            try:
+                await asyncio.wait_for(state_changed.wait(), timeout=delay)
+            except TimeoutError:
+                if endpoint.on_timeout(clock()) is not None:
+                    finalized.set()
+
     async def closer() -> None:
         nonlocal flushed
-        # Wait for local VAD to call speech-end, but exhausted audio is itself
-        # a definitive speech-end: audio that stops without a trailing silence
-        # window (a clipped buffer, a file-fed turn, a closed mic stream) would
-        # otherwise leave this waiting forever and deadlock the voice loop.
-        waiters = [asyncio.create_task(vad_ended.wait()),
-                   asyncio.create_task(audio_done.wait())]
-        try:
-            await asyncio.wait(waiters, return_when=asyncio.FIRST_COMPLETED)
-        finally:
-            for w in waiters:
-                w.cancel()
-        if not vad_ended.is_set():
-            vad_ended.set()
-            if span is not None and "speech_ended_vad" not in span.stages:
-                span.mark("speech_ended_vad")
+        await finalized.wait()
         if transport is not None and pending_audio:
             await transport.send_close_stream()
             flushed = True
-            with contextlib.suppress(asyncio.TimeoutError):
-                await asyncio.wait_for(got_final.wait(), timeout=max_wait_ms / 1000)
+            if endpoint.finalized_reason != "hard_stop":
+                with contextlib.suppress(asyncio.TimeoutError):
+                    await asyncio.wait_for(got_final.wait(), timeout=FLUSH_WAIT_MS / 1000)
         if span is not None:
             span.mark("stt_final")
         await out_queue.put(sentinel)
 
     pump_task = asyncio.create_task(pump())
     recv_task = asyncio.create_task(recv())
+    timer_task = asyncio.create_task(endpoint_timer())
     closer_task = asyncio.create_task(closer())
 
     try:
@@ -384,10 +684,10 @@ async def run_utterance(
                 raise item
             yield item
     finally:
-        for task in (pump_task, recv_task, closer_task):
+        for task in (pump_task, recv_task, timer_task, closer_task):
             if not task.done():
                 task.cancel()
-        await asyncio.gather(pump_task, recv_task, closer_task, return_exceptions=True)
+        await asyncio.gather(pump_task, recv_task, timer_task, closer_task, return_exceptions=True)
         if transport is not None and not flushed:
             with contextlib.suppress(Exception):
                 await transport.send_close_stream()
@@ -463,10 +763,59 @@ async def _run_live(eot_timeout_ms: int) -> None:
     await capture_loop(detector, _on_detection)
 
 
+async def endpoint_probe() -> int:
+    """Capture and transcribe one turn with endpoint diagnostics, never Claude."""
+    from friday.audio.capture import AudioCaptureService
+    from friday.audio.manager import AudioResourceManager
+
+    config = EndpointConfig.from_env()
+    stats = EndpointStats()
+    manager = AudioResourceManager()
+    capture = AudioCaptureService(manager)
+    stop = asyncio.Event()
+    await manager.start()
+    capture_task = asyncio.create_task(capture.run(stop))
+    subscription = capture.subscribe_live()
+    transcript = ""
+    print("Speak one natural request now. Ctrl-C cancels.\n")
+    try:
+        async with DeepgramTransport(_require_api_key()) as transport:
+            async for event in run_utterance(
+                subscription,
+                transport,
+                endpoint_config=config,
+                endpoint_stats=stats,
+            ):
+                if event.text.strip():
+                    transcript = event.text.strip()
+    finally:
+        subscription.close()
+        stop.set()
+        if not capture_task.done():
+            capture_task.cancel()
+        await asyncio.gather(capture_task, return_exceptions=True)
+        await manager.stop()
+
+    endpoint_ms = (
+        round((stats.finalized_at - stats.final_speech_at) * 1000)
+        if stats.finalized_at is not None and stats.final_speech_at is not None
+        else None
+    )
+    print(f"\ntranscript:\n{transcript!r}\n")
+    print(f"endpoint latency: {endpoint_ms if endpoint_ms is not None else 'unknown'} ms")
+    print(f"pauses survived: {stats.resumed_pauses}")
+    print(f"longest pause: {stats.longest_pause_ms} ms")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="python -m friday.voice.stt")
     parser.add_argument("--file", help="run a 16kHz mono 16-bit WAV through the full STT path")
-    parser.add_argument("--live", action="store_true", help="run live mic capture through the full STT path")
+    parser.add_argument(
+        "--live",
+        action="store_true",
+        help="run live mic capture through the full STT path",
+    )
     parser.add_argument("--eot-timeout-ms", type=int, default=DEFAULT_EOT_TIMEOUT_MS)
     args = parser.parse_args()
 

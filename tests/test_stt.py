@@ -17,9 +17,11 @@ import pytest
 
 from friday.core.spans import start_turn
 from friday.voice.stt import (
-    DEFAULT_EOT_TIMEOUT_MS,
     DEFAULT_EOT_THRESHOLD,
+    DEFAULT_EOT_TIMEOUT_MS,
     DeepgramTransport,
+    EndpointConfig,
+    EndpointStats,
     FluxTransportPool,
     LocalVAD,
     TranscriptEvent,
@@ -27,7 +29,9 @@ from friday.voice.stt import (
 )
 from friday.voice.wake import CHUNK_SAMPLES, SAMPLE_RATE, WakeDetection
 
-TEST_WAV = Path(__file__).resolve().parent.parent / "src" / "friday" / "test_data" / "alexa_test.wav"
+TEST_WAV = (
+    Path(__file__).resolve().parent.parent / "src" / "friday" / "test_data" / "alexa_test.wav"
+)
 
 
 class FakeTransport:
@@ -35,7 +39,9 @@ class FakeTransport:
     with growing transcripts, then a final. Captures every byte sent so the
     preroll/live seam can be asserted byte-exact."""
 
-    def __init__(self, events: list[tuple[float, TranscriptEvent]], config: Optional[dict] = None) -> None:
+    def __init__(
+        self, events: list[tuple[float, TranscriptEvent]], config: Optional[dict] = None
+    ) -> None:
         self._events = events
         self.config = config or {}
         self.sent_audio = bytearray()
@@ -79,7 +85,9 @@ def _wav_chunks(path: Path) -> list[bytes]:
     return chunks
 
 
-def _make_detection(live_chunks: list[bytes], preroll_chunks: int = 3, turn_id: str = "t") -> WakeDetection:
+def _make_detection(
+    live_chunks: list[bytes], preroll_chunks: int = 3, turn_id: str = "t"
+) -> WakeDetection:
     preroll = b"".join(live_chunks[:preroll_chunks])
     rest = live_chunks[preroll_chunks:]
     live: "asyncio.Queue[Optional[bytes]]" = asyncio.Queue()
@@ -117,7 +125,10 @@ async def _interims_arrive_before_final(tmp_path):
     events = [
         (0.0, TranscriptEvent(text="hey", is_final=False)),
         (0.01, TranscriptEvent(text="hey there", is_final=False)),
-        (0.01, TranscriptEvent(text="hey there friday", is_final=True, speech_final=True)),
+        (
+            0.01,
+            TranscriptEvent(text="hey there friday", is_final=True, speech_final=True),
+        ),
     ]
     transport = FakeTransport(events)
     span = start_turn("reflex", turn_id=detection.turn_id, path=tmp_path / "spans.jsonl")
@@ -141,7 +152,9 @@ async def _interims_arrive_before_final(tmp_path):
     assert "speech_ended_vad" in span.stages
     assert "stt_final" in span.stages
     assert span.stages["speech_ended_vad"] <= span.stages["stt_final"]
-    print(f"span speech_ended_vad={span.stages['speech_ended_vad']/1e6:.2f}ms stt_final={span.stages['stt_final']/1e6:.2f}ms")
+    print(
+        f"span speech_ended_vad={span.stages['speech_ended_vad'] / 1e6:.2f}ms stt_final={span.stages['stt_final'] / 1e6:.2f}ms"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -172,7 +185,9 @@ async def _preroll_seam_byte_exact():
     assert transport.sent_audio[: len(detection.preroll)] == detection.preroll
     seam = len(detection.preroll)
     assert transport.sent_audio[seam : seam + len(live_chunks_sent[0])] == live_chunks_sent[0]
-    print(f"sent_audio bytes={len(transport.sent_audio)} preroll_bytes={len(detection.preroll)} seam_ok=True")
+    print(
+        f"sent_audio bytes={len(transport.sent_audio)} preroll_bytes={len(detection.preroll)} seam_ok=True"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -190,11 +205,11 @@ def test_flux_turn_info_maps_end_of_turn_to_final():
 
     transport = DeepgramTransport.__new__(DeepgramTransport)
     transport._queue = asyncio.Queue()
-    transport._on_message(SimpleNamespace(
-        type="TurnInfo", event="EndOfTurn", transcript="hello"
-    ))
+    transport._on_message(SimpleNamespace(type="TurnInfo", event="EndOfTurn", transcript="hello"))
     event = transport._queue.get_nowait()
-    assert event == TranscriptEvent(text="hello", is_final=True, speech_final=True)
+    assert event == TranscriptEvent(
+        text="hello", is_final=True, speech_final=True, turn_event="EndOfTurn"
+    )
 
 
 def test_close_stream_flushes_before_waiting_for_end_of_turn():
@@ -267,12 +282,13 @@ async def _local_vad_fires_without_transport(tmp_path):
 
     assert events == []  # no transport => no transcript events, only local VAD
     assert "speech_ended_vad" in span.stages
-    print(f"speech_ended_vad fired at {span.stages['speech_ended_vad']/1e6:.2f}ms (wall {(t1 - t0)*1000:.2f}ms), transport=None")
+    print(
+        f"speech_ended_vad fired at {span.stages['speech_ended_vad'] / 1e6:.2f}ms (wall {(t1 - t0) * 1000:.2f}ms), transport=None"
+    )
 
 
 # ---------------------------------------------------------------------------
-# Criterion 5: the 700ms max-wait cap closes the turn if the transport never
-# sends a final.
+# Adaptive fallback closes the turn if Flux never sends EndOfTurn.
 # ---------------------------------------------------------------------------
 
 
@@ -283,21 +299,35 @@ def test_max_wait_cap_closes_turn(tmp_path):
 async def _max_wait_cap_closes_turn(tmp_path):
     chunks = _wav_chunks(TEST_WAV) + _silence_chunks(10)
     detection = _make_detection(chunks)
+    queued = []
+    while not detection.live.empty():
+        chunk = detection.live.get_nowait()
+        if chunk is not None:
+            queued.append(chunk)
+    for chunk in queued:
+        detection.live.put_nowait(chunk)
     # Interims only, forever - transport never sends is_final/speech_final/utterance_end.
     events = [(0.05, TranscriptEvent(text="still talking", is_final=False)) for _ in range(50)]
     transport = FakeTransport(events)
     span = start_turn("reflex", turn_id=detection.turn_id, path=tmp_path / "spans.jsonl")
 
     t0 = time.perf_counter()
-    async for _ in run_utterance(detection, transport, span=span, max_wait_ms=700):
+    config = EndpointConfig(vad_pause_ms=400, fast_ms=500, patient_ms=700, max_ms=800)
+    stats = EndpointStats()
+    async for _ in run_utterance(
+        detection, transport, span=span, endpoint_config=config, endpoint_stats=stats
+    ):
         pass
     t1 = time.perf_counter()
 
     elapsed_since_vad_ms = (span.stages["stt_final"] - span.stages["speech_ended_vad"]) / 1e6
-    print(f"turn closed after {(t1 - t0)*1000:.2f}ms wall; {elapsed_since_vad_ms:.2f}ms after speech_ended_vad (cap=700ms)")
+    print(
+        f"turn closed after {(t1 - t0) * 1000:.2f}ms wall; {elapsed_since_vad_ms:.2f}ms after speech_ended_vad"
+    )
     assert "speech_ended_vad" in span.stages
     assert "stt_final" in span.stages
-    assert 650 <= elapsed_since_vad_ms <= 900  # cap fired, with scheduling slack
+    endpoint_ms = (stats.finalized_at - stats.final_speech_at) * 1000
+    assert 690 <= endpoint_ms <= 780
 
 
 def test_segment_final_does_not_end_the_turn_before_speech_final():
@@ -306,12 +336,15 @@ def test_segment_final_does_not_end_the_turn_before_speech_final():
     async def scenario():
         chunks = _wav_chunks(TEST_WAV) + _silence_chunks(10)
         detection = _make_detection(chunks)
-        transport = FakeTransport([
-            (0.0, TranscriptEvent(text="", is_final=True)),
-            (0.05, TranscriptEvent(
-                text="are you working", is_final=True, speech_final=True
-            )),
-        ])
+        transport = FakeTransport(
+            [
+                (0.0, TranscriptEvent(text="", is_final=True)),
+                (
+                    0.05,
+                    TranscriptEvent(text="are you working", is_final=True, speech_final=True),
+                ),
+            ]
+        )
         return [event async for event in run_utterance(detection, transport)]
 
     seen = asyncio.run(scenario())
@@ -361,16 +394,21 @@ def test_zero_length_chunks_are_never_sent():
     async def scenario():
         queue: asyncio.Queue = asyncio.Queue()
         queue.put_nowait(b"\x01\x02" * CHUNK_SAMPLES)
-        queue.put_nowait(b"")           # must not reach the transport
+        queue.put_nowait(b"")  # must not reach the transport
         queue.put_nowait(b"\x03\x04" * CHUNK_SAMPLES)
         queue.put_nowait(None)
         detection = WakeDetection(
-            model="alexa", score=1.0, timestamp=time.time(), turn_id="t",
-            preroll=b"",                # empty preroll: must not be sent either
-            preroll_samples=0, preroll_seconds=0.0, live=queue,
+            model="alexa",
+            score=1.0,
+            timestamp=time.time(),
+            turn_id="t",
+            preroll=b"",  # empty preroll: must not be sent either
+            preroll_samples=0,
+            preroll_seconds=0.0,
+            live=queue,
         )
         transport = FakeTransport([(0.0, TranscriptEvent(text="hi", is_final=True))])
-        async for _ in run_utterance(detection, transport, max_wait_ms=100):
+        async for _ in run_utterance(detection, transport):
             pass
         return transport
 
@@ -394,11 +432,17 @@ def test_turn_closes_when_audio_ends_without_a_silence_tail():
             queue.put_nowait(b"\x40\x10" * CHUNK_SAMPLES)
         queue.put_nowait(None)
         detection = WakeDetection(
-            model="alexa", score=1.0, timestamp=time.time(), turn_id="t",
-            preroll=b"", preroll_samples=0, preroll_seconds=0.0, live=queue,
+            model="alexa",
+            score=1.0,
+            timestamp=time.time(),
+            turn_id="t",
+            preroll=b"",
+            preroll_samples=0,
+            preroll_seconds=0.0,
+            live=queue,
         )
         with start_turn("reasoning") as span:
-            async for _ in run_utterance(detection, None, span=span, max_wait_ms=100):
+            async for _ in run_utterance(detection, None, span=span):
                 pass
             return dict(span.stages)
 
@@ -422,11 +466,17 @@ def test_pump_failure_surfaces_instead_of_an_empty_turn():
         queue.put_nowait(b"\x01\x02" * CHUNK_SAMPLES)
         queue.put_nowait(None)
         detection = WakeDetection(
-            model="alexa", score=1.0, timestamp=time.time(), turn_id="t",
-            preroll=b"", preroll_samples=0, preroll_seconds=0.0, live=queue,
+            model="alexa",
+            score=1.0,
+            timestamp=time.time(),
+            turn_id="t",
+            preroll=b"",
+            preroll_samples=0,
+            preroll_seconds=0.0,
+            live=queue,
         )
         transport = ExplodingTransport([])
-        async for _ in run_utterance(detection, transport, max_wait_ms=100):
+        async for _ in run_utterance(detection, transport):
             pass
 
     with pytest.raises(RuntimeError, match="socket is gone"):

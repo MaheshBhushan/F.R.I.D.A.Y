@@ -24,6 +24,7 @@ actually begins hitting the device" without kernel/ALSA instrumentation.
 
 from __future__ import annotations
 
+import threading
 import time
 import wave
 from pathlib import Path
@@ -52,7 +53,12 @@ def list_acks() -> list[str]:
     return sorted(p.stem for p in ACKS_DIR.glob("*.wav"))
 
 
-def play_ack(name: str, span: Optional[TurnSpan] = None, blocking: bool = True) -> None:
+def play_ack(
+    name: str,
+    span: Optional[TurnSpan] = None,
+    blocking: bool = True,
+    stop_event: Optional[threading.Event] = None,
+) -> None:
     """Play the ack named `name` (matches a stem in acks/*.wav).
 
     Marks `ack_audible` on `span` the moment the first audio callback fires
@@ -68,10 +74,12 @@ def play_ack(name: str, span: Optional[TurnSpan] = None, blocking: bool = True) 
 
     def _callback(outdata, frames, time_info, status) -> None:
         nonlocal marked
+        if stop_event is not None and stop_event.is_set():
+            raise sd.CallbackStop()
         chunk = data[_callback.pos : _callback.pos + frames]
         outdata[: len(chunk), 0] = chunk
         if len(chunk) < frames:
-            outdata[len(chunk):, 0] = 0
+            outdata[len(chunk) :, 0] = 0
         _callback.pos += len(chunk)
         if not marked:
             marked = True
@@ -92,11 +100,13 @@ def play_ack(name: str, span: Optional[TurnSpan] = None, blocking: bool = True) 
     )
     # Transition outside the callback: the indicator writes a file, and the
     # callback runs on the audio thread where that risks a dropout.
-    with indicator.during(indicator.State.TALKING):
-        with stream:
-            if blocking:
-                duration = len(data) / sr
+    with indicator.during(indicator.State.TALKING), stream:
+        if blocking:
+            duration = len(data) / sr
+            if stop_event is None:
                 time.sleep(duration + 0.05)
+            else:
+                stop_event.wait(duration + 0.05)
 
 
 def main() -> int:
