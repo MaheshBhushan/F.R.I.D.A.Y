@@ -21,6 +21,9 @@ dependencies = [
 [project.scripts]
 friday = "friday.cli:main"
 
+[project.optional-dependencies]
+mcp = ["mcp>=1.12,<2"]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

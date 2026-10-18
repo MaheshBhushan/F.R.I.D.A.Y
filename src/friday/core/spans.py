@@ -55,6 +55,11 @@ class TurnSpan:
         self.wall_start = time.time()
         self._start_ns = time.perf_counter_ns()
         self.stages: dict[str, int] = {}
+        self.durations_ns: dict[str, int] = {}
+
+    def add_duration(self, name: str, elapsed_ns: int) -> None:
+        """Accumulate disjoint work intervals across all tool/model rounds."""
+        self.durations_ns[name] = self.durations_ns.get(name, 0) + elapsed_ns
 
     def mark(self, stage: str) -> int:
         """Record the current monotonic offset (ns) for `stage` and return it."""
@@ -68,6 +73,7 @@ class TurnSpan:
             "turn_kind": self.turn_kind,
             "wall_start": self.wall_start,
             "stages": dict(self.stages),
+            "durations_ns": dict(self.durations_ns),
         }
 
     def write(self) -> None:

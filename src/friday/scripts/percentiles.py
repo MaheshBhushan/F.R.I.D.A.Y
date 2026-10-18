@@ -61,7 +61,13 @@ def summarize(records: list[dict]) -> dict:
     kinds = {}
     for rec in records:
         kinds[rec.get("turn_kind", "?")] = kinds.get(rec.get("turn_kind", "?"), 0) + 1
-    return {"turns": len(records), "kinds": kinds, "stages": stages, "deltas": deltas}
+    duration_values: dict[str, list[int]] = {}
+    for rec in records:
+        for name, elapsed in rec.get("durations_ns", {}).items():
+            duration_values.setdefault(name, []).append(elapsed)
+    durations = [_row(name, sorted(values)) for name, values in sorted(duration_values.items())]
+    return {"turns": len(records), "kinds": kinds, "stages": stages,
+            "deltas": deltas, "durations": durations}
 
 
 def _row(name: str, values: list[int]) -> dict:
@@ -105,6 +111,13 @@ def format_table(summary: dict) -> str:
             f"{row['name']:<40} {row['count']:>6} {fmt(row['p50_ms']):>10} "
             f"{fmt(row['p90_ms']):>10} {fmt(row['p99_ms']):>10}"
         )
+    if summary.get("durations"):
+        lines += ["", "accumulated durations (tools includes approval and connection):"]
+        for row in summary["durations"]:
+            lines.append(
+                f"{row['name']:<40} {row['count']:>6} {fmt(row['p50_ms']):>10} "
+                f"{fmt(row['p90_ms']):>10} {fmt(row['p99_ms']):>10}"
+            )
     return "\n".join(lines)
 
 

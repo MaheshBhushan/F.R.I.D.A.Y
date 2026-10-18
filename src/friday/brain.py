@@ -368,14 +368,18 @@ async def _run_tool_round(
     is five overlapping calls, not five sequential round-trips."""
     if span is not None:
         span.mark("first_tool_call")
-    outcomes = await asyncio.gather(
-        *(
-            execute(c.id, c.name, c.input, approve=approve, registry=registry)
-            for c in calls
+    started_ns = time.perf_counter_ns()
+    try:
+        outcomes = await asyncio.gather(
+            *(
+                execute(c.id, c.name, c.input, approve=approve, registry=registry)
+                for c in calls
+            )
         )
-    )
-    if span is not None:
-        span.mark("tool_done")
+    finally:
+        if span is not None:
+            span.add_duration("tools", time.perf_counter_ns() - started_ns)
+            span.mark("tool_done")
     return list(outcomes)
 
 
@@ -429,7 +433,16 @@ async def complete(
             span.mark("llm_sent")
         pending: tuple[ToolCall, ...] = ()
         assistant_content: Any = None
-        async for event in transport.stream(request):
+        events = aiter(transport.stream(request))
+        while True:
+            started_ns = time.perf_counter_ns()
+            try:
+                event = await anext(events)
+            except StopAsyncIteration:
+                break
+            finally:
+                if span is not None:
+                    span.add_duration("llm_wait", time.perf_counter_ns() - started_ns)
             if event.kind == "text":
                 if event.text:
                     if not first_token_marked and span is not None:

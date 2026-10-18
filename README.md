@@ -23,6 +23,7 @@ The key design choice is a three-tier router. Reflexes and machine-state queries
 - Barge-in by saying the wake word during playback
 - SQLite FTS5 long-term memory with bounded prompt retrieval
 - Gated local tools, screen capture for "what am I looking at" turns, and optional Exa web search
+- Optional [async MCP forecast queries](docs/mcp.md) with validated numerical summaries
 - Microphone arbitration that yields to calls, meetings, and recording apps
 - Authenticated local WebSocket gateway and scriptable CLI
 - Direct daemon mode or systemd user-service operation
