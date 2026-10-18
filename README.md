@@ -123,6 +123,21 @@ These are live measurements recorded in [`GOLIVE.md`](GOLIVE.md), not estimates.
 
 The reasoning TTFT misses the original 300–600 ms target. FRIDAY hides part of that delay with an acknowledgement; materially faster first content would require routing simple reasoning turns to a smaller model.
 
+## Voice code review
+
+Say “review staged changes” or “review my staged Git diff” to review the
+repository in FRIDAY's working directory. Say “review staged changes in
+/home/me/My Project” to select another repository. Paths preserve case and spaces;
+matching single or double quotes around a path are optional.
+
+FRIDAY sends the staged diff to Claude and reads the findings through its existing
+speech pipeline. The command uses the configured Anthropic transport and API key.
+Unstaged edits and untracked files are excluded. Empty staging areas, invalid
+repositories, and diffs larger than 60,000 bytes produce a spoken message without
+a model request. The review does not run tests. Review turns have no tools and
+cannot edit, stage, commit, or push files. The existing command allowlist remains
+unchanged.
+
 ## Safety model
 
 Tool names are explicitly allowlisted and mapped to a risk level:
