@@ -789,6 +789,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--path", help="spans file (default ~/.friday/spans.jsonl)")
     p.set_defaults(func=cmd_stats)
 
+    from friday import comparison
+
+    comparison.add_parser(sub)
+
     p = sub.add_parser("token", help="print the gateway token")
     p.add_argument("--rotate", action="store_true")
     p.set_defaults(func=cmd_token)
