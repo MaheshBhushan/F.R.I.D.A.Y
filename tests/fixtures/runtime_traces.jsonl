@@ -1,0 +1,4 @@
+{"turn_id":"healthy","turn_kind":"state_query","wall_start":1700000000,"stages":{"speech_ended_vad":100000000,"intent_classified":120000000,"first_content_audio":300000000,"task_complete":400000000},"durations_ns":{}}
+{"turn_id":"delayed","turn_kind":"reasoning","wall_start":1700000001,"stages":{"speech_ended_vad":100000000,"intent_classified":200000000,"llm_sent":300000000,"ack_audible":400000000,"first_token":3500000000,"first_content_audio":4100000000,"task_complete":5000000000},"durations_ns":{"llm_wait":3200000000}}
+{"turn_id":"missing","turn_kind":"reasoning","wall_start":1700000002,"stages":{"speech_ended_vad":100000000,"intent_classified":200000000,"ack_audible":400000000},"durations_ns":{}}
+{"turn_id":"wake-only","turn_kind":"pending","wall_start":1700000003,"stages":{"wake_detected":0,"stt_final":200000000},"durations_ns":{}}

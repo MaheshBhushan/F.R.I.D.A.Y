@@ -28,6 +28,7 @@ The key design choice is a three-tier router. Reflexes and machine-state queries
 - Authenticated local WebSocket gateway and scriptable CLI
 - Direct daemon mode or systemd user-service operation
 - Structured latency spans with a `friday stats` percentile report, and an offline test suite with fake service transports
+- Optional [local runtime dashboard](docs/runtime-dashboard.md) with span percentiles and automatic slow/missing-response alerts
 
 ## Quickstart
 

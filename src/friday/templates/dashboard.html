@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="refresh" content="5">
+<title>FRIDAY runtime metrics</title>
+<style>
+  body { font: 16px system-ui, sans-serif; margin: 2rem auto; padding: 0 1rem; max-width: 1100px; color: #172b4d; background: #f5f7fa; }
+  table { border-collapse: collapse; width: 100%; margin-bottom: 2rem; background: white; }
+  th, td { padding: .6rem; border-bottom: 1px solid #ccd5e0; text-align: left; }
+  .scroll { overflow-x: auto; }
+  .warning { background: #fff0ce; padding: 1rem; }
+  code { overflow-wrap: anywhere; }
+</style>
+<h1>FRIDAY runtime metrics</h1>
+<p>Latest {{ data.summary.turns }} turns, up to {{ data.thresholds.limit }}. Refreshes every 5 seconds. <a href="{{ url_for('metrics') }}">JSON metrics</a></p>
+<p>Slow response: &gt; {{ data.thresholds.slow_ms }} ms. Missing response: &ge; {{ data.thresholds.missing_ms }} ms.</p>
+{% if data.source_error %}<p class="warning" role="alert">Trace read failed: {{ data.source_error }}</p>{% endif %}
+{% if data.invalid_records %}<p class="warning">Skipped {{ data.invalid_records }} invalid or partial records in the selected input.</p>{% endif %}
+<h2>Alerts ({{ data.alerts | length }})</h2>
+{% for alert in data.alerts %}
+<p class="warning" role="alert"><strong>{{ alert.code }}</strong>: <code>{{ alert.turn_id }}</code> ({{ alert.turn_kind }}), {{ alert.elapsed_ms }} ms</p>
+{% else %}<p>No alerts in the selected turns.</p>{% endfor %}
+{% if not data.summary.turns %}<p>No turns recorded. Waiting for spans.</p>{% endif %}
+{% for label, rows in [('Stage offsets', data.summary.stages), ('Stage deltas', data.summary.deltas), ('Accumulated durations', data.summary.durations)] %}
+<h2>{{ label }}</h2>
+<div class="scroll"><table>
+<caption>{{ label }} in milliseconds</caption>
+<thead><tr><th scope="col">Metric</th><th scope="col">Count</th><th scope="col">p50</th><th scope="col">p90</th><th scope="col">p99</th></tr></thead>
+<tbody>{% for row in rows %}<tr><th scope="row">{{ row.name }}</th><td>{{ row.count }}</td>{% for q in ['p50_ms', 'p90_ms', 'p99_ms'] %}<td>{{ row[q] if row[q] is not none else '—' }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+</table></div>
+{% endfor %}
+<h2>Recent traces</h2>
+{% for record in data.records | reverse %}
+<details><summary>{{ record.turn_id }} · {{ record.turn_kind }}</summary><pre>{{ record | tojson(indent=2) }}</pre></details>
+{% endfor %}
+</html>
