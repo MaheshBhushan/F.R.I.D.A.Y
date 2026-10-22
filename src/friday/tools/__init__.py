@@ -19,6 +19,7 @@ import re
 import shlex
 import shutil
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Awaitable, Callable, Optional
 
 from friday import agents as coding_agents
@@ -60,6 +61,12 @@ RISK.update({"web_search": Risk.READ_ONLY})
 # description (only for questions about the screen) and FRIDAY_SCREENSHOT=0,
 # not by a per-call prompt.
 RISK.update({"screenshot": Risk.READ_ONLY})
+
+# Tools whose results carry local file content into the conversation, and
+# tools that send conversation content to a third party. Once a turn has used
+# a source, the sinks stop auto-executing (see `execute(tainted=...)`).
+TAINT_SOURCES = frozenset({"read_file"})
+EXFIL_SINKS = frozenset({"web_search", "screenshot"})
 
 _UNIT_RE = re.compile(r"^[A-Za-z0-9_.@-]{1,128}$")
 
@@ -137,12 +144,82 @@ async def run_readonly_command(command: str) -> str:
     return await _run(safe_argv(command))
 
 
+# open_app auto-executes (SAFE_REVERSIBLE), so it launches only programs that
+# an installed .desktop entry presents as a graphical app. Anything else --
+# power/session control, shells, interpreters, arbitrary binaries on PATH --
+# is refused. The denylist stays as a second layer for odd .desktop entries.
+OPEN_APP_DENIED = frozenset({
+    "reboot", "poweroff", "halt", "shutdown", "systemctl", "loginctl",
+    "init", "telinit", "kexec", "suspend", "hibernate", "zzz",
+    "xdg-screensaver", "pkill", "killall", "kill", "sudo", "doas", "su",
+    "pkexec", "rm", "dd", "mkfs", "wipefs", "sh", "bash", "zsh", "fish",
+    "dash", "python", "python3", "node", "bun", "perl", "ruby", "env",
+})
+
+
+def _application_dirs() -> list[Path]:
+    data_home = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
+    data_dirs = os.environ.get("XDG_DATA_DIRS") or "/usr/local/share:/usr/share"
+    return [Path(d) / "applications" for d in [data_home, *data_dirs.split(":")] if d]
+
+
+def _parse_desktop_entry(path: Path) -> Optional[str]:
+    """The Exec program of a launchable, visible, non-terminal Application entry."""
+    fields: dict[str, str] = {}
+    in_entry = False
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    for line in text.splitlines():
+        line = line.strip()
+        if line.startswith("["):
+            in_entry = line == "[Desktop Entry]"
+            continue
+        if in_entry and "=" in line:
+            key, _, value = line.partition("=")
+            fields.setdefault(key.strip(), value.strip())
+    if fields.get("Type") != "Application" or not fields.get("Exec"):
+        return None
+    if any(fields.get(k, "").lower() == "true" for k in ("NoDisplay", "Hidden", "Terminal")):
+        return None
+    try:
+        argv = shlex.split(fields["Exec"])
+    except ValueError:
+        return None
+    argv = [a for a in argv if "=" not in a or a.startswith("/")]
+    if argv and Path(argv[0]).name == "env":
+        argv = argv[1:]
+    return argv[0] if argv else None
+
+
+def desktop_apps() -> dict[str, str]:
+    """Map launchable names (desktop-file id and program name) to the program."""
+    apps: dict[str, str] = {}
+    for appdir in reversed(_application_dirs()):  # earlier XDG dirs win
+        if not appdir.is_dir():
+            continue
+        for entry in appdir.rglob("*.desktop"):
+            program = _parse_desktop_entry(entry)
+            if program is None:
+                continue
+            apps[entry.stem] = program
+            apps[Path(program).name] = program
+    return apps
+
+
 async def open_app(app: str) -> str:
     """SAFE_REVERSIBLE. Launch a desktop app (closing it undoes this)."""
     if "/" in app or any(c in app for c in ";&|`$()<>\n"):
         raise PermissionDenied(f"refused: unsafe app name {app!r}")
-    binary = shutil.which(app)
-    if binary is None:
+    program = (await asyncio.to_thread(desktop_apps)).get(app)
+    if program is None:
+        raise PermissionDenied(f"refused: {app!r} is not an installed desktop app")
+    name = Path(program).name
+    if name in OPEN_APP_DENIED or name.startswith(("systemd-", "mkfs.")):
+        raise PermissionDenied(f"refused: {app!r} is not a reversible desktop app")
+    binary = program if Path(program).is_absolute() else shutil.which(program)
+    if binary is None or not os.access(binary, os.X_OK):
         return f"[no such app on PATH: {app}]"
     await asyncio.create_subprocess_exec(
         binary,
@@ -219,8 +296,10 @@ TOOLS: dict[str, Callable[..., Awaitable[str]]] = {
 TOOL_SPECS: list[dict] = [
     {
         "name": "read_file",
-        "description": "Read a text file from disk. Confined to the user's home, "
-        "/var/log, /proc, /sys and /tmp; credential files are refused.",
+        "description": "Read a text file from disk. Confined to ~/Documents, "
+        "~/Downloads, ~/Desktop, ~/notes, ~/projects, ~/code, ~/src, ~/workspace, "
+        "FRIDAY_READ_ROOTS, /var/log, /proc, /sys and /tmp; hidden files and "
+        "credential files are refused.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -268,7 +347,8 @@ TOOL_SPECS: list[dict] = [
     },
     {
         "name": "open_app",
-        "description": "Launch a desktop application by binary name.",
+        "description": "Launch an installed desktop application (one with a "
+        ".desktop entry) by its program name or desktop-file id.",
         "input_schema": {
             "type": "object",
             "properties": {"app": {"type": "string"}},
@@ -384,13 +464,20 @@ async def execute(
     *,
     approve: Optional[ApprovalCallback] = None,
     registry: Optional[dict[str, Callable[..., Awaitable["str | list[dict]"]]]] = None,
+    tainted: bool = False,
 ) -> ToolOutcome:
     """Authorize, then run, one tool call. Denials and tool errors both come
     back as `is_error` outcomes so the model can see and recover from them --
-    a denial is never silently dropped."""
+    a denial is never silently dropped.
+
+    `tainted` means this turn already read local file content. Tools that send
+    data off the machine (`EXFIL_SINKS`) then need approval, so text planted in
+    a file cannot quietly ship that file out through a search query or a
+    screenshot."""
     registry = TOOLS if registry is None else registry
     try:
-        await authorize(name, arguments, approve)
+        await authorize(name, arguments, approve,
+                        force_approval=tainted and name in EXFIL_SINKS)
         fn = registry.get(name)
         if fn is None:
             raise PermissionDenied(f"unrecognised tool {name!r}: no implementation")
