@@ -379,3 +379,131 @@ def test_journalctl_mutating_flags_denied(command):
 
 def test_journalctl_read_only_usage_still_allowed():
     assert safe_argv("journalctl -n 5 -u sshd")[0] == "journalctl"
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "git -ccore.fsmonitor=reboot status",
+        "git -c core.fsmonitor=reboot status",
+        "git --exec-path=/tmp status",
+        "git diff --output=/home/x/.bashrc",
+        "git log --output /tmp/out",
+        "git diff --no-index /dev/null /home/x/.ssh/id_ed25519",
+        "git branch evil",
+        "git branch -D main",
+        "git branch -vD main",
+        "git branch --delete main",
+        "git remote add evil https://example.invalid/x",
+        "git remote set-url origin https://example.invalid/x",
+        "journalctl --cursor-file=/home/x/.bashrc",
+        "systemctl -H root@example.invalid status",
+    ],
+)
+def test_safe_argv_refuses_flag_driven_writes_and_exec(raw):
+    with pytest.raises(PermissionDenied):
+        safe_argv(raw)
+
+
+@pytest.mark.parametrize(
+    "raw",
+    ["git branch", "git branch -a", "git branch --list feat*", "git remote -v",
+     "git remote show origin", "git --no-pager log -n 3", "git diff --stat"],
+)
+def test_safe_argv_still_allows_git_read_forms(raw):
+    if "*" in raw:
+        with pytest.raises(PermissionDenied):  # glob metachar stays refused
+            safe_argv(raw)
+    else:
+        assert safe_argv(raw)[0] == "git"
+
+
+@sync
+async def test_open_app_refuses_power_and_shell_binaries():
+    for app in ("reboot", "poweroff", "shutdown", "bash", "systemd-run"):
+        outcome = await execute("t9b", "open_app", {"app": app})
+        assert outcome.is_error and outcome.content.startswith("DENIED:"), app
+
+
+# --- round 2: narrowed read roots, .desktop allowlist, taint escalation -------
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "~/.config/hermes/config.yaml",
+        "~/.local/share/keyrings/login.keyring",
+        "~/.mozilla/firefox/profiles.ini",
+        "~/Documents/.hidden/notes.txt",
+        "~/random-top-level-file.txt",
+        "/tmp/project/.git/config",
+    ],
+)
+def test_safe_path_refuses_dotfiles_and_home_outside_content_dirs(raw):
+    with pytest.raises(PermissionDenied):
+        safe_path(raw)
+
+
+def test_safe_path_allows_documents_and_extra_roots(monkeypatch, tmp_path):
+    import friday.tools.sanitize as sanitize
+
+    assert safe_path("~/Documents/report.txt").name == "report.txt"
+    monkeypatch.setenv("FRIDAY_READ_ROOTS", str(tmp_path))
+    roots = sanitize._read_roots()
+    assert safe_path(str(tmp_path / "src" / "main.py"), roots=roots).name == "main.py"
+
+
+@sync
+async def test_open_app_only_launches_desktop_entries(tmp_path, monkeypatch):
+    apps = tmp_path / "share" / "applications"
+    apps.mkdir(parents=True)
+    (apps / "viewer.desktop").write_text(
+        "[Desktop Entry]\nType=Application\nName=Viewer\nExec=true %U\n"
+    )
+    (apps / "term-only.desktop").write_text(
+        "[Desktop Entry]\nType=Application\nExec=htop\nTerminal=true\n"
+    )
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "share"))
+    monkeypatch.setenv("XDG_DATA_DIRS", str(tmp_path / "none"))
+    ok = await execute("t10", "open_app", {"app": "viewer"})
+    assert not ok.is_error and ok.content == "launched viewer"
+    for app in ("htop", "term-only", "xterm", "reboot", "bash"):
+        outcome = await execute("t10b", "open_app", {"app": app})
+        assert outcome.is_error and outcome.content.startswith("DENIED:"), app
+
+
+@sync
+async def test_exfil_sinks_need_approval_after_a_file_read():
+    async def fake_search(query: str) -> str:
+        return "results"
+
+    registry = {"web_search": fake_search}
+    clean = await execute("t11", "web_search", {"query": "x"}, registry=registry)
+    assert not clean.is_error
+    denied = await execute("t11b", "web_search", {"query": "x"}, registry=registry, tainted=True)
+    assert denied.is_error and denied.content.startswith("DENIED:")
+    asked = []
+
+    async def approve(request):
+        asked.append(request.tool)
+        return True
+
+    allowed = await execute(
+        "t11c", "web_search", {"query": "x"}, registry=registry, tainted=True, approve=approve
+    )
+    assert not allowed.is_error and asked == ["web_search"]
+
+
+@sync
+async def test_escalated_request_is_flagged_for_the_approver():
+    seen = []
+
+    async def approve(request):
+        seen.append(request.escalated)
+        return False
+
+    async def fake_shot() -> str:
+        return "img"
+
+    out = await execute("t12", "screenshot", {}, registry={"screenshot": fake_shot},
+                        tainted=True, approve=approve)
+    assert out.is_error and seen == [True]

@@ -34,7 +34,7 @@ from typing import Any, AsyncIterator, Awaitable, Callable, Optional, Protocol
 from friday import state
 from friday.core.spans import TurnSpan, start_turn
 from friday.permissions import ApprovalCallback
-from friday.tools import TOOL_SPECS, ToolOutcome, execute
+from friday.tools import TAINT_SOURCES, TOOL_SPECS, ToolOutcome, execute
 from friday.voice import indicator
 
 MODEL = "claude-opus-5"
@@ -363,6 +363,7 @@ async def _run_tool_round(
     approve: Optional[ApprovalCallback],
     registry: Optional[dict[str, Callable[..., Awaitable[str]]]],
     span: Optional[TurnSpan],
+    tainted: bool = False,
 ) -> list[ToolOutcome]:
     """Execute every tool of one round concurrently. A five-call diagnostic
     is five overlapping calls, not five sequential round-trips."""
@@ -370,7 +371,8 @@ async def _run_tool_round(
         span.mark("first_tool_call")
     outcomes = await asyncio.gather(
         *(
-            execute(c.id, c.name, c.input, approve=approve, registry=registry)
+            execute(c.id, c.name, c.input, approve=approve, registry=registry,
+                    tainted=tainted)
             for c in calls
         )
     )
@@ -426,7 +428,10 @@ async def complete(
                 assistant_content = event.assistant_content
         if not pending:
             break
-        outcomes = await _run_tool_round(pending, approve, registry, span)
+        tainted = any(
+            o.name in TAINT_SOURCES and not o.is_error for o in result.outcomes
+        )
+        outcomes = await _run_tool_round(pending, approve, registry, span, tainted)
         result.outcomes.extend(outcomes)
         request = dict(request)
         request["messages"] = list(request["messages"]) + [
