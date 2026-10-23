@@ -30,6 +30,7 @@ The key design choice is a three-tier router. Reflexes and machine-state queries
 - Structured latency spans with a `friday stats` percentile report, and an offline test suite with fake service transports
 - Optional [local runtime dashboard](docs/runtime-dashboard.md) with span percentiles and automatic slow/missing-response alerts
 - Offline [business-task comparison reports](docs/business-comparison.md) with fixed fixtures, manual baselines, quality checks, recorded latency, model costs and limitations
+- Optional local Hugging Face Transformers generation through the existing reasoning transport, with a fixed hosted/local quality, latency and tool-routing comparison
 
 ## Quickstart
 
@@ -125,6 +126,17 @@ These are live measurements recorded in [`GOLIVE.md`](GOLIVE.md), not estimates.
 | Shutdown with turn in flight | 183 ms | Live assembled loop |
 
 The reasoning TTFT misses the original 300–600 ms target. FRIDAY hides part of that delay with an acknowledgement; materially faster first content would require routing simple reasoning turns to a smaller model.
+
+## Local model comparison
+
+Install the optional backend and choose a local or Hugging Face model:
+
+```bash
+uv sync --extra local
+FRIDAY_LLM_BACKEND=transformers FRIDAY_LOCAL_MODEL=Qwen/Qwen2.5-3B-Instruct uv run friday start
+```
+
+The local backend follows the same request and tool-call event interface as the hosted transport. It generates each response in one batch, so local text is not streamed token by token. Tool calls use a JSON envelope with `text` and `tool_calls` fields. Run `uv run friday compare-backends --local-model Qwen/Qwen2.5-3B-Instruct` to compare four fixed synthetic tasks. The command needs `ANTHROPIC_API_KEY` for the hosted baseline and reports observed latency, exact JSON-field quality checks, tool calls, and routing regressions. It does not persist results or claim measurements before both models run.
 
 ## Voice code review
 

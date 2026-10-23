@@ -792,6 +792,9 @@ def build_parser() -> argparse.ArgumentParser:
     from friday import comparison
 
     comparison.add_parser(sub)
+    from friday import backend_comparison
+
+    backend_comparison.add_parser(sub)
 
     p = sub.add_parser("token", help="print the gateway token")
     p.add_argument("--rotate", action="store_true")

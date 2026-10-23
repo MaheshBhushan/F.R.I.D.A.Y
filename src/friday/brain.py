@@ -127,6 +127,19 @@ class AnthropicTransport:
         )
 
 
+def configured_transport() -> Transport:
+    """Select the hosted default or the opt-in local Transformers backend."""
+    backend = os.environ.get("FRIDAY_LLM_BACKEND", "anthropic").lower()
+    if backend == "anthropic":
+        return AnthropicTransport(_require_api_key())
+    if backend == "transformers":
+        model = os.environ.get("FRIDAY_LOCAL_MODEL")
+        if not model:
+            raise SystemExit("error: set FRIDAY_LOCAL_MODEL to a local or Hugging Face model ID")
+        from friday.local_transformers import TransformersTransport
+
+        return TransformersTransport(model)
+    raise SystemExit(f"error: unsupported FRIDAY_LLM_BACKEND: {backend}")
 @dataclass
 class ScriptedTurn:
     """One scripted transport response: tokens, then optional tool calls."""

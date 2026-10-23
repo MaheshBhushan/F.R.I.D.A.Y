@@ -24,6 +24,7 @@ friday = "friday.cli:main"
 [project.optional-dependencies]
 mcp = ["mcp>=1.12,<2"]
 dashboard = ["Flask>=3.1,<4"]
+local = ["transformers>=4.45", "torch>=2.2"]
 
 [build-system]
 requires = ["hatchling"]
