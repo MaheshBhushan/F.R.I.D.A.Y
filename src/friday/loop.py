@@ -872,7 +872,9 @@ def build_live(*, speak: bool = True) -> VoiceLoop:
     assembler = brain.ContextAssembler(memory=memory)
 
     async def _approve(request) -> bool:
-        if auto_approve_enabled():
+        # An escalated call (web_search/screenshot after a file read in the
+        # same turn) is never auto-approved: it could carry file content out.
+        if auto_approve_enabled() and not request.escalated:
             return True
         if not sys.stdin.isatty():
             # Under systemd there is nobody to answer; input() would raise

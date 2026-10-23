@@ -20,14 +20,33 @@ from pathlib import Path
 
 from friday.permissions import PermissionDenied
 
-# Reads are confined to these roots (after full symlink resolution).
-ALLOWED_READ_ROOTS: tuple[Path, ...] = (
-    Path.home(),
-    Path("/var/log"),
-    Path("/proc"),
-    Path("/sys"),
-    Path("/tmp"),
+# Reads are confined to these roots (after full symlink resolution). The home
+# directory is NOT a root: only the user-content folders below are, so config
+# and credential stores (~/.config, ~/.local, ~/.mozilla, ...) stay out of reach.
+# FRIDAY_READ_ROOTS (colon-separated) adds project/workspace directories.
+HOME_READ_DIRS = (
+    "Documents", "Downloads", "Desktop", "notes", "Notes",
+    "projects", "Projects", "code", "src", "workspace",
 )
+
+
+def _read_roots() -> tuple[Path, ...]:
+    extra = [
+        Path(os.path.expanduser(p)).resolve()
+        for p in os.environ.get("FRIDAY_READ_ROOTS", "").split(":")
+        if p.strip()
+    ]
+    return (
+        *((Path.home() / d).resolve() for d in HOME_READ_DIRS),
+        *extra,
+        Path("/var/log"),
+        Path("/proc"),
+        Path("/sys"),
+        Path("/tmp"),
+    )
+
+
+ALLOWED_READ_ROOTS: tuple[Path, ...] = _read_roots()
 
 # Roots that are never readable even though they sit inside an allowed root.
 DENIED_READ_ROOTS: tuple[Path, ...] = (
@@ -104,8 +123,13 @@ def safe_path(raw: str, *, roots: tuple[Path, ...] = ALLOWED_READ_ROOTS) -> Path
     if DENIED_NAME_RE.search(path.name):
         _reject(f"refused: {raw!r} looks like a credential file ({path.name})")
 
-    if not any(path == root or root in path.parents for root in roots):
+    root = next((r for r in roots if path == r or r in path.parents), None)
+    if root is None:
         _reject(f"refused: {raw!r} resolves outside the readable roots ({path})")
+    # Dot-directories and dotfiles inside a root (.git/config, .config,
+    # .mozilla, .local/share/keyrings) hold config and credentials.
+    if any(part.startswith(".") for part in path.relative_to(root).parts):
+        _reject(f"refused: {raw!r} is a hidden file or inside a hidden directory")
 
     return path
 
@@ -117,8 +141,65 @@ DENIED_FLAGS: dict[str, frozenset[str]] = {
     "journalctl": frozenset({
         "--rotate", "--vacuum-size", "--vacuum-time", "--vacuum-files",
         "--flush", "--sync", "--relinquish-var", "--setup-keys",
+        "--cursor-file", "--update-catalog",
     }),
+    # `-H/--host` and `-M/--machine` make systemctl open an SSH or container
+    # connection, which is not a local read.
+    "systemctl": frozenset({"--host", "-H", "--machine", "-M"}),
 }
+
+# git global options are refused outright: `-c core.fsmonitor=<cmd>`,
+# `--exec-path`, `--config-env`, `--git-dir` and friends turn `git status`
+# into arbitrary command execution or point it at another repository.
+GIT_GLOBAL_OPTIONS_ALLOWED = frozenset({"--no-pager", "--no-optional-locks"})
+
+# Flags that make a read-only git subcommand write a file (`--output`) or
+# read outside the repository (`--no-index` diffs two arbitrary paths, which
+# would bypass `safe_path`), or run an external diff program.
+GIT_DENIED_FLAGS = frozenset({"--output", "--no-index", "--ext-diff"})
+
+# `git branch` and `git remote` mutate with positional arguments or these
+# flags; only their listing forms are read-only.
+GIT_BRANCH_MUTATING_SHORT = frozenset("dDmMcCfut")
+GIT_BRANCH_MUTATING_LONG = frozenset({
+    "--delete", "--move", "--copy", "--force", "--set-upstream-to",
+    "--unset-upstream", "--edit-description", "--track", "--no-track",
+    "--create-reflog", "--recurse-submodules",
+})
+GIT_BRANCH_LIST_FLAGS = frozenset({
+    "-l", "--list", "--contains", "--no-contains", "--merged", "--no-merged",
+    "--points-at",
+})
+GIT_REMOTE_READ_ONLY = frozenset({"show", "get-url"})
+
+
+def _check_git(argv: list[str]) -> None:
+    """Refuse git invocations that execute code or write despite a read-only subcommand."""
+    sub_index = next((i for i, a in enumerate(argv[1:], 1) if not a.startswith("-")), None)
+    if sub_index is None:
+        return  # bare `git` / `git --version`: the subcommand check refuses it
+    for arg in argv[1:sub_index]:
+        if arg not in GIT_GLOBAL_OPTIONS_ALLOWED:
+            _reject(f"refused: git global option {arg!r} is not allowed")
+    sub, rest = argv[sub_index], argv[sub_index + 1:]
+    for arg in rest:
+        if arg.split("=", 1)[0] in GIT_DENIED_FLAGS:
+            _reject(f"refused: git {sub} {arg!r} writes or reads outside the repository")
+    if sub == "branch":
+        for arg in rest:
+            if arg.startswith("--") and arg.split("=", 1)[0] in GIT_BRANCH_MUTATING_LONG:
+                _reject(f"refused: git branch {arg!r} modifies branches")
+            if arg.startswith("-") and not arg.startswith("--") and (
+                set(arg[1:]) & GIT_BRANCH_MUTATING_SHORT
+            ):
+                _reject(f"refused: git branch {arg!r} modifies branches")
+        positional = [a for a in rest if not a.startswith("-")]
+        if positional and not any(a.split("=", 1)[0] in GIT_BRANCH_LIST_FLAGS for a in rest):
+            _reject("refused: git branch with a name creates a branch; use --list")
+    elif sub == "remote":
+        action = next((a for a in rest if not a.startswith("-")), None)
+        if action is not None and action not in GIT_REMOTE_READ_ONLY:
+            _reject(f"refused: git remote {action!r} is not read-only")
 
 
 def safe_argv(raw: str) -> list[str]:
@@ -152,6 +233,9 @@ def safe_argv(raw: str) -> list[str]:
                 _reject(
                     f"refused: {argv[0]} {arg!r} is a mutating flag, not read-only"
                 )
+
+    if argv[0] == "git":
+        _check_git(argv)
 
     if allowed_sub:
         sub = next((a for a in argv[1:] if not a.startswith("-")), None)

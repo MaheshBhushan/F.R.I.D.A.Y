@@ -173,6 +173,7 @@ deploy/          systemd user-service template
 | `FRIDAY_STT_MODEL` | Deepgram Flux model; use `flux-general-en` for English-only speech | `flux-general-multi` |
 | `FRIDAY_STT_KEYTERMS` | Comma-separated vocabulary to bias recognition toward (project names, tool names) | unset |
 | `FRIDAY_TTS_VOICE` | Deepgram Aura voice model | `aura-2-asteria-en` |
+| `FRIDAY_READ_ROOTS` | Extra colon-separated directories `read_file` may read (e.g. project checkouts). Built-in roots are `~/Documents`, `~/Downloads`, `~/Desktop`, `~/notes`, `~/projects`, `~/code`, `~/src`, `~/workspace`, `/var/log`, `/proc`, `/sys`, `/tmp`; hidden files and dot-directories are always refused. After a turn reads a file, `web_search` and `screenshot` need approval that `FRIDAY_AUTO_APPROVE` does not cover. `open_app` launches only programs with a visible, non-terminal `.desktop` entry | unset |
 | `FRIDAY_SCREENSHOT` | Allow the `screenshot` tool to send the display to Claude for "what am I looking at" turns (`1`/`0`) | `1` |
 | `FRIDAY_VAD_PAUSE_MS` | Local silence before entering possible-end state | `400` |
 | `FRIDAY_ENDPOINT_FAST_MS` | Total silence fallback for short complete commands | `650` |

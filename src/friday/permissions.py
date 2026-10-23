@@ -58,6 +58,9 @@ class ApprovalRequest:
     risk: Risk
     arguments: dict
     action: str
+    # True when an auto-executing tool was escalated because the turn read
+    # local file content. FRIDAY_AUTO_APPROVE does not cover these.
+    escalated: bool = False
 
     @property
     def requires_explicit_approval(self) -> bool:
@@ -84,21 +87,27 @@ async def authorize(
     tool: str,
     arguments: dict,
     approve: Optional[ApprovalCallback] = None,
+    *,
+    force_approval: bool = False,
 ) -> ApprovalRequest:
     """Gate one tool call. Returns the ApprovalRequest that was evaluated, or
-    raises PermissionDenied. Unknown tools and a missing callback both deny."""
+    raises PermissionDenied. Unknown tools and a missing callback both deny.
+
+    `force_approval` sends an otherwise auto-executing call to `approve`
+    anyway (used when the turn has already read local file content)."""
     risk = risk_of(tool)
     request = ApprovalRequest(
         tool=tool,
         risk=risk,
         arguments=dict(arguments),
         action=render_action(tool, arguments),
+        escalated=force_approval and risk in AUTO_EXECUTE,
     )
     if tool not in RISK:
         raise PermissionDenied(
             f"unrecognised tool {tool!r}: refused as destructive (default deny)"
         )
-    if risk in AUTO_EXECUTE:
+    if risk in AUTO_EXECUTE and not force_approval:
         return request
     if approve is None:
         raise PermissionDenied(
