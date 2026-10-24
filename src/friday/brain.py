@@ -31,9 +31,9 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, AsyncIterator, Awaitable, Callable, Optional, Protocol
 
-from friday import state
+from friday import review, state
 from friday.core.spans import TurnSpan, start_turn
-from friday.permissions import ApprovalCallback
+from friday.permissions import ApprovalCallback, PermissionDenied
 from friday.tools import TAINT_SOURCES, TOOL_SPECS, ToolOutcome, execute
 from friday.voice import indicator
 
@@ -401,12 +401,28 @@ async def complete(
     rounds produce no tokens, so speech simply pauses while tools run.
     """
     indicator.set_state(indicator.State.THINKING)
-    if context is None and assembler is not None:
-        context = await assembler.get(transcript, span=span)
-    request = build_request(
-        transcript, context=context, history=history, tools=tools
-    )
     result = result if result is not None else TurnResult()
+    review_directory = review.repository_for(transcript)
+    if review_directory is not None:
+        try:
+            diff = await review.staged_diff(review_directory)
+            message = "" if diff.strip() else "There are no staged changes to review."
+        except (ValueError, PermissionDenied) as exc:
+            message = str(exc)
+        if message:
+            result.text = message
+            yield message
+            indicator.settle()
+            if span is not None:
+                span.mark("task_complete")
+            return
+        request = build_request(diff, tools=[], system=review.REVIEW_PROMPT)
+    elif context is None and assembler is not None:
+        context = await assembler.get(transcript, span=span)
+    if review_directory is None:
+        request = build_request(
+            transcript, context=context, history=history, tools=tools
+        )
     first_token_marked = False
 
     for round_index in range(max_rounds):
@@ -427,6 +443,12 @@ async def complete(
                 pending = event.tool_calls
                 assistant_content = event.assistant_content
         if not pending:
+            break
+        if review_directory is not None:
+            # Enforce review-only behavior even if a transport returns tool calls.
+            message = "The review requested an unavailable tool. No action was taken."
+            result.text += message
+            yield message
             break
         tainted = any(
             o.name in TAINT_SOURCES and not o.is_error for o in result.outcomes
