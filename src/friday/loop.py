@@ -857,8 +857,16 @@ class VoiceLoop:
 def build_live(*, speak: bool = True) -> VoiceLoop:
     """Wire the real transports. Raises if the keys aren't exported."""
     dg = os.environ.get("DEEPGRAM_API_KEY")
+    backend = os.environ.get("FRIDAY_LLM_BACKEND", "anthropic").lower()
     anthropic = os.environ.get("ANTHROPIC_API_KEY")
-    missing = [n for n, v in (("DEEPGRAM_API_KEY", dg), ("ANTHROPIC_API_KEY", anthropic)) if not v]
+    required = [("DEEPGRAM_API_KEY", dg)]
+    if backend == "anthropic":
+        required.append(("ANTHROPIC_API_KEY", anthropic))
+    elif backend == "transformers":
+        required.append(("FRIDAY_LOCAL_MODEL", os.environ.get("FRIDAY_LOCAL_MODEL")))
+    else:
+        raise SystemExit(f"error: unsupported FRIDAY_LLM_BACKEND: {backend}")
+    missing = [n for n, v in required if not v]
     if missing:
         raise SystemExit(
             "error: missing " + ", ".join(missing) + ". Run: set -a; . ~/.friday/env; set +a"
@@ -892,7 +900,7 @@ def build_live(*, speak: bool = True) -> VoiceLoop:
     return VoiceLoop(
         stt_factory=stt.FluxTransportPool(dg, **stt.env_stt_options()),
         tts_factory=lambda: tts.DeepgramSpeakTransport(dg, **tts.env_tts_options()),
-        llm_transport=brain.AnthropicTransport(anthropic),
+        llm_transport=brain.configured_transport(),
         assembler=assembler,
         memory=memory,
         session_memory=session_memory,

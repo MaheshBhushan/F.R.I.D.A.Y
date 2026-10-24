@@ -29,6 +29,7 @@ from friday.tools.sanitize import safe_argv, safe_path
 # would shadow the `friday.tools.screenshot` submodule attribute.
 from friday.tools import screenshot as _screenshot
 from friday.tools.websearch import web_search
+from friday.tools.forecast import SPEC as FORECAST_SPEC, query_forecast
 
 # T9: coding-agent delegation runs real processes in tmux panes, so it sits
 # outside the tiers this module used to cover alone. Registered here (a dict
@@ -61,6 +62,7 @@ RISK.update({"web_search": Risk.READ_ONLY})
 # description (only for questions about the screen) and FRIDAY_SCREENSHOT=0,
 # not by a per-call prompt.
 RISK.update({"screenshot": Risk.READ_ONLY})
+RISK.update({"query_forecast": Risk.READ_ONLY})
 
 # Tools whose results carry local file content into the conversation, and
 # tools that send conversation content to a third party. Once a turn has used
@@ -289,6 +291,7 @@ TOOLS: dict[str, Callable[..., Awaitable[str]]] = {
     "stop_coding_agent": stop_coding_agent,
     "web_search": web_search,
     "screenshot": _screenshot.screenshot,
+    "query_forecast": query_forecast,
 }
 
 # Order is load-bearing: `tools` is rendered before `system` and sits inside
@@ -434,6 +437,7 @@ TOOL_SPECS: list[dict] = [
         },
     },
     _screenshot.SPEC,
+    FORECAST_SPEC,
 ]
 
 

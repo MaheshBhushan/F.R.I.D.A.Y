@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "tasks": [
+    {
+      "id": "invoice-check",
+      "title": "Check an invoice before approval",
+      "prompt": "Check this synthetic invoice. Currency: EUR. There are 8 filter packs at EUR 12.50 each and 3 valves at EUR 40.00 each. VAT is 19% on all items. The supplier claims a gross total of EUR 270.00. Return only a JSON object with net_eur, vat_eur, gross_eur, overcharge_eur as numbers and decision as either approve or hold. Hold an invoice if the claimed gross total differs from the calculated total. Do not contact the supplier or approve a payment.",
+      "criteria": {
+        "net_eur": "Calculate the net line-item total.",
+        "vat_eur": "Calculate VAT on the net total.",
+        "gross_eur": "Calculate the correct gross total.",
+        "overcharge_eur": "Calculate claimed gross minus correct gross.",
+        "decision": "Hold the mismatched invoice."
+      },
+      "expected": {"net_eur": 220, "vat_eur": 41.8, "gross_eur": 261.8, "overcharge_eur": 8.2, "decision": "hold"}
+    },
+    {
+      "id": "meeting-actions",
+      "title": "Extract meeting actions with owners and dates",
+      "prompt": "Extract actions from these synthetic meeting notes. Meeting date: 2026-09-14. Mira will send the revised quote by 2026-09-16. Leon will review the safety checklist; no deadline was agreed. The next meeting is on 2026-09-21, but nobody was assigned to organise it. Return only a JSON object with actions as an array in note order. Each action must contain owner, task and due_date. Use task labels send revised quote and review safety checklist. Use ISO dates and null for an unspecified deadline. Include only explicitly assigned actions. Do not create calendar events or send messages.",
+      "criteria": {"actions": "Extract exactly the two assigned actions, preserve their owners, and leave the missing deadline null."},
+      "expected": {"actions": [{"owner": "Mira", "task": "send revised quote", "due_date": "2026-09-16"}, {"owner": "Leon", "task": "review safety checklist", "due_date": null}]}
+    },
+    {
+      "id": "ticket-triage",
+      "title": "Prioritise an internal support queue",
+      "prompt": "Triage these synthetic tickets using only this policy: P1 means a production outage affecting all users; P2 means one blocked user with no workaround; P3 means a request with a workaround or a cosmetic issue. T-101: all users cannot open the production dispatch system. T-102: one employee cannot log in and has no workaround. T-103: a dashboard label has a typo; work can continue. Return only a JSON object with ticket IDs as keys and priority strings as values. Do not change tickets or invent response-time commitments.",
+      "criteria": {"T-101": "Apply the all-user outage rule.", "T-102": "Apply the blocked-user rule.", "T-103": "Apply the cosmetic issue rule."},
+      "expected": {"T-101": "P1", "T-102": "P2", "T-103": "P3"}
+    }
+  ]
+}
