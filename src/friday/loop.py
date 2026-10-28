@@ -373,17 +373,27 @@ class VoiceLoop:
                 # detector tests and file-fed callers.
                 turn_task = asyncio.create_task(self.handle_detection(detection))
             else:
-
-                async def _start_turn() -> Turn:
-                    if previous_task is not None and not previous_task.done():
-                        await asyncio.gather(previous_task, return_exceptions=True)
-                    return await self.handle_detection(
-                        detection, subscription=subscription, span=span
-                    )
-
-                turn_task = asyncio.create_task(_start_turn())
+                turn_task = asyncio.create_task(
+                    self._handle_after(previous_task, detection, subscription, span)
+                )
             self._turn_task = turn_task
 
+    async def _handle_after(
+        self,
+        previous: asyncio.Task | None,
+        detection: wake.WakeDetection,
+        subscription: AudioSubscription,
+        span: TurnSpan,
+    ) -> Turn:
+        """Run a detection's turn once the previous turn has wound down.
+
+        Takes its inputs as arguments rather than closing over `_pump`'s loop
+        variables: while this waits on `previous`, the pump keeps iterating and
+        rebinds `detection` and `subscription` on later chunks.
+        """
+        if previous is not None and not previous.done():
+            await asyncio.gather(previous, return_exceptions=True)
+        return await self.handle_detection(detection, subscription=subscription, span=span)
 
     # -- one turn ---------------------------------------------------------
 

@@ -307,6 +307,54 @@ def test_pump_subscribes_before_scheduling_stt(tmp_path):
     assert order == ["subscribed", "task-started"]
 
 
+def test_queued_turn_keeps_its_own_detection_while_pump_continues(tmp_path):
+    """A turn queued behind a still-running one must start with the detection
+    and subscription it was created for, not whatever the pump bound later."""
+    lp, _, _, _ = _build(tmp_path, transcript_events=[])
+    first = object()
+    seen: dict[str, Any] = {}
+    handled = asyncio.Event()
+
+    class Capture:
+        def subscribe_stt(self):
+            return first
+
+    class Detector(FakeDetector):
+        calls = 0
+
+        def detect_chunk(self, chunk, span=None):
+            self.calls += 1
+            return self.start() if self.calls == 1 else None
+
+    lp._capture = Capture()
+    lp._detector = Detector()
+
+    async def _handle(detection, *, subscription, span):
+        seen["detection"] = detection
+        seen["subscription"] = subscription
+        handled.set()
+        return loop_mod.Turn(turn_id=span.turn_id)
+
+    lp.handle_detection = _handle
+
+    async def _run():
+        release = asyncio.Event()
+        lp._turn_task = asyncio.create_task(release.wait())
+
+        async def _frames():
+            yield b"\x00" * 2560  # wake: queues a turn behind the running one
+            yield b"\x00" * 2560  # no wake: rebinds the pump's `detection`
+            await asyncio.sleep(0)
+            release.set()
+
+        await lp._pump(_frames(), asyncio.Event())
+        await asyncio.wait_for(handled.wait(), timeout=1)
+
+    asyncio.run(_run())
+    assert seen["detection"] is not None
+    assert seen["subscription"] is first
+
+
 def test_follow_up_runs_until_cancelled_and_then_closes_audio(tmp_path):
     class Source:
         async def capture(self, stop):
