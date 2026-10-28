@@ -31,6 +31,7 @@ import sys
 from pathlib import Path
 
 from friday import daemon
+from friday.core.paths import ENV_PATH, PROJECT_ROOT
 
 GREEN, RED, YELLOW, DIM, RESET = (
     "\033[32m",
@@ -49,6 +50,11 @@ def _colour(enabled: bool):
 
 def _tty() -> bool:
     return sys.stdout.isatty() and os.environ.get("NO_COLOR") is None
+
+
+def _dim(text: str) -> str:
+    _, _, _, d, x = _colour(_tty())
+    return f"{d}{text}{x}"
 
 
 def _mark(good: bool | None) -> str:
@@ -77,7 +83,7 @@ def cmd_start(args: argparse.Namespace) -> int:
         # what the user wanted was to watch her, and she is watchable.
         return _attach() if not getattr(args, "detach", False) else 0
 
-    print(f"{DIM if _tty() else ''}starting…{RESET if _tty() else ''}", flush=True)
+    print(_dim("starting…"), flush=True)
     result = daemon.start(timeout=args.timeout)
     if result.healthy:
         info = result.health or {}
@@ -123,7 +129,7 @@ def _update_run(command: list[str], root: Path) -> subprocess.CompletedProcess:
 
 def cmd_update(args: argparse.Namespace) -> int:
     """Fast-forward the checkout, sync locked dependencies, and restart."""
-    root = Path(__file__).resolve().parents[2]
+    root = PROJECT_ROOT
     if not (root / ".git").is_dir():
         print(f"{_mark(False)} update requires a git checkout: {root}", file=sys.stderr)
         return 1
@@ -298,10 +304,7 @@ def _attach(lines: int = 12) -> int:
     the gateway bound, whether the voice loop came up) has already scrolled
     past into the journal.
     """
-    print(
-        f"{DIM if _tty() else ''}— streaming; Ctrl-C detaches "
-        f"(she keeps running){RESET if _tty() else ''}"
-    )
+    print(_dim("— streaming; Ctrl-C detaches (she keeps running)"))
     try:
         return _tail(follow=True, lines=lines)
     except KeyboardInterrupt:
@@ -404,22 +407,34 @@ def _require_running() -> bool:
     return False
 
 
+def _call_or_report(method: str, params: dict) -> dict | None:
+    """`_call`, printing the failure. None means the error is already reported.
+
+    The common gateway error is a refusal because a call owns the mic, which
+    is correct behaviour and deserves a plain explanation, not a stack.
+    """
+    result = _call(method, params)
+    if result is None:
+        print(f"{_mark(False)} no answer from the gateway", file=sys.stderr)
+        return None
+    if "__error__" in result:
+        print(f"{_mark(False)} {result['__error__'].get('message')}", file=sys.stderr)
+        return None
+    return result
+
+
 def cmd_ask(args: argparse.Namespace) -> int:
     if not _require_running():
         return 2
     text = " ".join(args.text)
-    result = _call("ask", {"text": text, "speak": args.speak})
+    result = _call_or_report("ask", {"text": text, "speak": args.speak})
     if result is None:
-        print(f"{_mark(False)} no answer from the gateway", file=sys.stderr)
-        return 1
-    if "__error__" in result:
-        print(f"{_mark(False)} {result['__error__'].get('message')}", file=sys.stderr)
         return 1
     if result.get("error"):
         print(f"{_mark(False)} {result['error']}", file=sys.stderr)
         return 1
     tier = result.get("tier") or "?"
-    print(f"{DIM if _tty() else ''}[{tier}]{RESET if _tty() else ''} {result.get('reply', '')}")
+    print(f"{_dim(f'[{tier}]')} {result.get('reply', '')}")
     return 0
 
 
@@ -427,14 +442,7 @@ def cmd_say(args: argparse.Namespace) -> int:
     if not _require_running():
         return 2
     text = " ".join(args.text)
-    result = _call("say", {"text": text})
-    if result is None:
-        print(f"{_mark(False)} no answer from the gateway", file=sys.stderr)
-        return 1
-    if "__error__" in result:
-        # The common case here is a refusal because a call owns the mic, which
-        # is correct behaviour and deserves a plain explanation, not a stack.
-        print(f"{_mark(False)} {result['__error__'].get('message')}", file=sys.stderr)
+    if _call_or_report("say", {"text": text}) is None:
         return 1
     print(f"{_mark(True)} said: {text}")
     return 0
@@ -464,13 +472,10 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         nonlocal problems
         if good is False:
             problems += 1
-        print(
-            f"  {_mark(good)} {label}"
-            + (f"  {DIM if _tty() else ''}{note}{RESET if _tty() else ''}" if note else "")
-        )
+        print(f"  {_mark(good)} {label}" + (f"  {_dim(note)}" if note else ""))
 
     print("credentials")
-    env_file = Path.home() / ".friday" / "env"
+    env_file = ENV_PATH
     check("~/.friday/env exists", env_file.exists(), str(env_file))
     if env_file.exists():
         mode = env_file.stat().st_mode & 0o777
@@ -521,9 +526,8 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         )
 
     print("gateway")
-    token = Path(
-        os.environ.get("FRIDAY_GATEWAY_TOKEN_FILE", Path.home() / ".friday" / "gateway-token")
-    )
+    from friday.gateway.auth import TOKEN_PATH as token
+
     if token.exists():
         mode = token.stat().st_mode & 0o777
         check("token file is 0600", mode == 0o600, f"mode {mode:o}")
@@ -573,6 +577,8 @@ def _run_ok(cmd: list[str]) -> str | None:
 
 # ----------------------------------------------------------------- install
 
+UNIT_DIR = Path.home() / ".config" / "systemd" / "user"
+
 
 def render_unit(template: str, root: Path) -> str:
     """Fill the unit template's `@ROOT@` / `@ROOT_URI@` placeholders.
@@ -590,7 +596,7 @@ def render_unit(template: str, root: Path) -> str:
 
 
 def cmd_install(args: argparse.Namespace) -> int:
-    root = Path(__file__).resolve().parent.parent.parent
+    root = PROJECT_ROOT
     source = root / "deploy" / "friday.service"
     if not source.exists():
         print(f"{_mark(False)} unit template not found at {source}", file=sys.stderr)
@@ -607,9 +613,8 @@ def cmd_install(args: argparse.Namespace) -> int:
             print("  refusing to install while it is still running", file=sys.stderr)
             return 1
 
-    target_dir = Path.home() / ".config" / "systemd" / "user"
-    target_dir.mkdir(parents=True, exist_ok=True)
-    target = target_dir / daemon.UNIT_NAME
+    UNIT_DIR.mkdir(parents=True, exist_ok=True)
+    target = UNIT_DIR / daemon.UNIT_NAME
     target.write_text(render_unit(source.read_text(), root))
     print(f"{_mark(True)} installed {target}")
 
@@ -630,7 +635,7 @@ def cmd_install(args: argparse.Namespace) -> int:
 
 def cmd_uninstall(args: argparse.Namespace) -> int:
     subprocess.call(["systemctl", "--user", "disable", "--now", daemon.UNIT_NAME])
-    target = Path.home() / ".config" / "systemd" / "user" / daemon.UNIT_NAME
+    target = UNIT_DIR / daemon.UNIT_NAME
     if target.exists():
         target.unlink()
         print(f"{_mark(True)} removed {target}")
