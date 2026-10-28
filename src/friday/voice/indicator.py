@@ -31,10 +31,11 @@ import threading
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from enum import Enum
-from pathlib import Path
 from typing import IO
 
-STATUS_PATH = Path.home() / ".friday" / "status"
+from friday.core.paths import FRIDAY_HOME
+
+STATUS_PATH = FRIDAY_HOME / "status"
 
 
 class State(Enum):

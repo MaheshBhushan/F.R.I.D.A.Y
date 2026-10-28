@@ -33,13 +33,12 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
-FRIDAY_HOME = Path(os.environ.get("FRIDAY_HOME", Path.home() / ".friday"))
+from friday.core.env import load_env_file
+from friday.core.paths import FRIDAY_HOME, PROJECT_ROOT
+
 PID_PATH = FRIDAY_HOME / "friday.pid"
 LOG_PATH = FRIDAY_HOME / "friday.log"
 UNIT_NAME = "friday.service"
-ENV_PATH = FRIDAY_HOME / "env"
-# The installed package root: .../friday/src/friday/daemon.py -> .../friday
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 # Cold start loads the wake-word ONNX model and opens a capture stream, so the
 # first health answer is seconds away, not milliseconds. Waiting less than this
@@ -420,42 +419,3 @@ def reap_echo_cancel() -> int:
             freed += 1
     return freed
 
-
-# ------------------------------------------------------------ env file
-
-def load_env_file(path: Path | None = None) -> dict[str, str]:
-    """Parse `~/.friday/env` into a dict. Missing file is not an error.
-
-    Parsed in Python rather than sourced through a shell. Sourcing would handle
-    exotic syntax, but it also executes whatever is in the file -- and this file
-    exists specifically to hold API keys, so it is the last thing that should
-    gain the ability to run commands as a side effect of starting the daemon.
-
-    Understands the format the file actually uses: `export KEY=value`, optional
-    surrounding quotes, `#` comments, blank lines. Anything it does not
-    understand is skipped rather than guessed at.
-    """
-    target = path or ENV_PATH
-    try:
-        raw = target.read_text()
-    except OSError:
-        return {}
-
-    values: dict[str, str] = {}
-    for line in raw.splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        if line.startswith("export "):
-            line = line[len("export "):].lstrip()
-        key, sep, value = line.partition("=")
-        if not sep:
-            continue
-        key = key.strip()
-        if not key.replace("_", "").isalnum():
-            continue
-        value = value.strip()
-        if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
-            value = value[1:-1]
-        values[key] = value
-    return values

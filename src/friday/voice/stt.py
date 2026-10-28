@@ -14,7 +14,6 @@ import asyncio
 import contextlib
 import os
 import re
-import sys
 import time
 import wave
 from collections.abc import AsyncIterator, Callable
@@ -24,6 +23,7 @@ from typing import Any, Protocol
 
 from friday.audio.capture import AudioSubscription
 from friday.core import events
+from friday.core.env import require_key
 from friday.core.spans import TurnSpan, start_turn
 from friday.voice.wake import CHUNK_SAMPLES, PREROLL_SECONDS, SAMPLE_RATE, WakeDetection
 
@@ -716,14 +716,7 @@ async def run_utterance(
 
 
 def _require_api_key() -> str:
-    key = os.environ.get("DEEPGRAM_API_KEY")
-    if not key:
-        print(
-            "error: DEEPGRAM_API_KEY is not set. Export DEEPGRAM_API_KEY=<your key> and retry.",
-            file=sys.stderr,
-        )
-        raise SystemExit(1)
-    return key
+    return require_key("DEEPGRAM_API_KEY")
 
 
 def _detection_from_wav(path: str, turn_id: str = "cli") -> WakeDetection:

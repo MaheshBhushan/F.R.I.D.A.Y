@@ -26,7 +26,9 @@ import sqlite3
 import time
 from pathlib import Path
 
-DEFAULT_DB_PATH = Path.home() / ".friday" / "memory.db"
+from friday.core.paths import FRIDAY_HOME
+
+DEFAULT_DB_PATH = FRIDAY_HOME / "memory.db"
 
 # Retrieval payload cap. ~4 chars/token is the accepted estimate for this
 # project; 800 tokens * 4 chars/token.

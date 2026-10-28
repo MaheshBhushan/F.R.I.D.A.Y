@@ -26,10 +26,10 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from friday.core.paths import FRIDAY_HOME
 from friday.gateway.protocol import ErrorCode, ProtocolError
 
-TOKEN_PATH = Path(os.environ.get("FRIDAY_GATEWAY_TOKEN_FILE",
-                                 Path.home() / ".friday" / "gateway-token"))
+TOKEN_PATH = Path(os.environ.get("FRIDAY_GATEWAY_TOKEN_FILE", FRIDAY_HOME / "gateway-token"))
 TOKEN_ENV = "FRIDAY_GATEWAY_TOKEN"
 TOKEN_BYTES = 32
 

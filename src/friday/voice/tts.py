@@ -22,11 +22,11 @@ import asyncio
 import contextlib
 import os
 import re
-import sys
 import time
 from collections.abc import AsyncIterator
 from typing import Any, Protocol
 
+from friday.core.env import require_key
 from friday.core.spans import TurnSpan
 from friday.voice import indicator
 
@@ -394,14 +394,7 @@ class TTSSpeaker:
 
 
 def _require_api_key() -> str:
-    key = os.environ.get("DEEPGRAM_API_KEY")
-    if not key:
-        print(
-            "error: DEEPGRAM_API_KEY is not set. Export DEEPGRAM_API_KEY=<your key> and retry.",
-            file=sys.stderr,
-        )
-        raise SystemExit(1)
-    return key
+    return require_key("DEEPGRAM_API_KEY")
 
 
 def main() -> int:

@@ -20,6 +20,8 @@ import time
 import uuid
 from pathlib import Path
 
+from friday.core.paths import FRIDAY_HOME
+
 STAGES = (
     "wake_detected",
     "stt_subscription_created",
@@ -42,7 +44,7 @@ STAGES = (
     "task_complete",
 )
 
-DEFAULT_SPANS_PATH = Path.home() / ".friday" / "spans.jsonl"
+DEFAULT_SPANS_PATH = FRIDAY_HOME / "spans.jsonl"
 
 
 def active_spans_dir(path: Path) -> Path:

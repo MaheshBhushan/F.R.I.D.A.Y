@@ -38,9 +38,10 @@ import json
 import re
 from dataclasses import dataclass
 from enum import IntEnum
-from pathlib import Path
 
-PRIORITY_PATH = Path.home() / ".friday" / "mic-priority.json"
+from friday.core.paths import FRIDAY_HOME
+
+PRIORITY_PATH = FRIDAY_HOME / "mic-priority.json"
 
 
 class Priority(IntEnum):

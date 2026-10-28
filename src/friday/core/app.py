@@ -16,6 +16,7 @@ import random
 import signal
 
 from friday.core import events
+from friday.core.env import load_credentials
 from friday.core.spans import STAGES, start_turn
 
 REFLEX_STAGES = (
@@ -187,28 +188,8 @@ async def run_selftest(turns: int) -> None:
             print(json.dumps(t.to_record(), sort_keys=True))
 
 
-def _load_credentials() -> None:
-    """Load ~/.friday/env into the environment if it is not already there.
-
-    Done here, in the daemon's own startup, so every way of launching it
-    behaves identically: `friday start`, `friday start --foreground`,
-    `systemctl --user start friday`, and a bare `python -m friday`.
-
-    This is not belt-and-braces with the unit's `EnvironmentFile=`. That
-    directive does *not* understand `export KEY=value`, which is the format
-    this file uses -- systemd parses the variable name as "export KEY" and
-    silently drops it. Measured: a file containing `export FOO=bar` yields an
-    empty $FOO. So under systemd the credentials never arrived at all, and the
-    only symptom was `voice_loop=false` with no error anywhere.
-    """
-    from friday.daemon import load_env_file
-
-    for key, value in load_env_file().items():
-        os.environ.setdefault(key, value)
-
-
 def main(argv: list[str] | None = None) -> int:
-    _load_credentials()
+    load_credentials()
     parser = argparse.ArgumentParser(prog="friday")
     parser.add_argument("--selftest", action="store_true",
                          help="drive synthetic turn(s) through every span stage and exit")

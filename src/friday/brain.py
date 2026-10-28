@@ -33,6 +33,7 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from friday import review, state
+from friday.core.env import require_key
 from friday.core.spans import TurnSpan, start_turn
 from friday.permissions import ApprovalCallback, PermissionDenied
 from friday.tools import TAINT_SOURCES, TOOL_SPECS, ToolOutcome, execute
@@ -495,14 +496,7 @@ async def complete(
 
 
 def _require_api_key() -> str:
-    key = os.environ.get("ANTHROPIC_API_KEY")
-    if not key:
-        print(
-            "error: ANTHROPIC_API_KEY is not set. Export ANTHROPIC_API_KEY=<your key> and retry.",
-            file=sys.stderr,
-        )
-        raise SystemExit(1)
-    return key
+    return require_key("ANTHROPIC_API_KEY")
 
 
 async def _run_live(prompt: str) -> None:

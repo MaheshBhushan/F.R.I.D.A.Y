@@ -26,12 +26,12 @@ overwrites placeholder files with real Aura audio.
 from __future__ import annotations
 
 import argparse
-import os
 import subprocess
-import sys
 import tempfile
 import wave
 from pathlib import Path
+
+from friday.core.env import require_key
 
 ACKS_DIR = Path(__file__).resolve().parent.parent / "voice" / "acks"
 TARGET_SAMPLE_RATE = 24000  # matches Deepgram Aura's default linear16 WAV output
@@ -57,16 +57,11 @@ PHRASES: dict[str, str] = {
 
 
 def _require_api_key() -> str:
-    key = os.environ.get("DEEPGRAM_API_KEY")
-    if not key:
-        print(
-            "error: DEEPGRAM_API_KEY is not set. Aura rendering needs it - "
-            "export DEEPGRAM_API_KEY=<your key> and retry with --engine aura. "
-            "Until then, use --engine espeak-ng for a placeholder bank.",
-            file=sys.stderr,
-        )
-        raise SystemExit(1)
-    return key
+    return require_key(
+        "DEEPGRAM_API_KEY",
+        "Aura rendering needs it - export DEEPGRAM_API_KEY=<your key> and retry with "
+        "--engine aura. Until then, use --engine espeak-ng for a placeholder bank.",
+    )
 
 
 def _render_espeak_ng(phrase: str, out_path: Path) -> None:

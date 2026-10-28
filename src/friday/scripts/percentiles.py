@@ -10,7 +10,7 @@ import json
 import statistics
 from pathlib import Path
 
-DEFAULT_SPANS_PATH = Path.home() / ".friday" / "spans.jsonl"
+from friday.core.spans import DEFAULT_SPANS_PATH
 
 DELTAS = (
     ("ack_audible - speech_ended_vad", "ack_audible", "speech_ended_vad"),
