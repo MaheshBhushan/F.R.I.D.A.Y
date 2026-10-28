@@ -36,6 +36,26 @@ RISK: dict[str, Risk] = {
     "open_app": Risk.SAFE_REVERSIBLE,
     "install_package": Risk.MACHINE_MODIFYING,
     "delete_path": Risk.DESTRUCTIVE,
+    # Coding-agent delegation runs real processes in tmux panes.
+    #   - check_agent_status only captures pane text, no side effect.
+    #   - delegate_coding_agent spawns a process that can edit the user's files
+    #     (reversible via git / killing the session, but not read-only).
+    #   - stop_coding_agent kills an in-progress agent, which can discard
+    #     uncommitted work the agent was mid-way through.
+    "check_agent_status": Risk.READ_ONLY,
+    "delegate_coding_agent": Risk.MACHINE_MODIFYING,
+    "stop_coding_agent": Risk.DESTRUCTIVE,
+    # web_search sends data OUT to a third party (Exa), but the call has no side
+    # effect on this machine. The exfiltration risk is handled by `safe_query()`
+    # refusing secret-shaped or local-data queries and by taint escalation in
+    # `tools.execute`, not by an approval prompt (a voice assistant that
+    # confirms every search is useless).
+    "web_search": Risk.READ_ONLY,
+    # screenshot reads the display and ships it to the model; nothing on the
+    # machine changes. Privacy is handled by the tool description (only for
+    # questions about the screen) and FRIDAY_SCREENSHOT=0.
+    "screenshot": Risk.READ_ONLY,
+    "query_forecast": Risk.READ_ONLY,
 }
 
 AUTO_EXECUTE = frozenset({Risk.READ_ONLY, Risk.SAFE_REVERSIBLE})

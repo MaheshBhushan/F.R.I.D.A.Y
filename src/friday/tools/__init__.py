@@ -1,8 +1,7 @@
 """The tool surface FRIDAY exposes to the LLM.
 
-Five read-mostly tools plus one machine-modifying and one destructive tool,
-each with a tier in `friday.permissions.RISK`, plus T9's coding-agent
-delegation tools (one read-only, one machine-modifying, one destructive).
+Every tool here has a tier in `friday.permissions.RISK`, the single
+allowlist; a tool registered here without one is refused as destructive.
 `TOOL_SPECS` is the Anthropic tool-definition list (stable ordering -- it is
 part of the cached prefix, so the order must not vary between turns).
 
@@ -23,46 +22,13 @@ from pathlib import Path
 from typing import Awaitable, Callable, Optional
 
 from friday import agents as coding_agents
-from friday.permissions import RISK, ApprovalCallback, PermissionDenied, Risk, authorize
+from friday.permissions import ApprovalCallback, PermissionDenied, authorize
 from friday.tools.sanitize import safe_argv, safe_path
 # Imported as a module, not `from ... import screenshot`: the function
 # would shadow the `friday.tools.screenshot` submodule attribute.
 from friday.tools import screenshot as _screenshot
 from friday.tools.websearch import web_search
 from friday.tools.forecast import SPEC as FORECAST_SPEC, query_forecast
-
-# T9: coding-agent delegation runs real processes in tmux panes, so it sits
-# outside the tiers this module used to cover alone. Registered here (a dict
-# mutation, not an edit to permissions.py) per that module's own contract --
-# RISK is "an allowlist", not something only permissions.py may populate.
-#   - check_agent_status: only captures pane text, no side effect -> READ_ONLY.
-#   - delegate_coding_agent: spawns a process that can edit the user's files
-#     -> MACHINE_MODIFYING (reversible via git / killing the session, but not
-#     read-only).
-#   - stop_coding_agent: kills an in-progress agent, which can discard
-#     uncommitted work the agent was mid-way through -> DESTRUCTIVE.
-RISK.update(
-    {
-        "check_agent_status": Risk.READ_ONLY,
-        "delegate_coding_agent": Risk.MACHINE_MODIFYING,
-        "stop_coding_agent": Risk.DESTRUCTIVE,
-    }
-)
-
-# web_search is the first tool that sends data OUT to a third party (Exa),
-# but the call itself has no side effect on this machine and returns
-# read-only search results -> READ_ONLY, auto-execute. The exfiltration risk
-# is handled by `safe_query()` refusing secret-shaped or local-data queries,
-# not by an approval prompt (a voice assistant that confirms every search is
-# useless).
-RISK.update({"web_search": Risk.READ_ONLY})
-
-# screenshot reads the display and ships it to the model. Nothing on the
-# machine changes -> READ_ONLY. The privacy question is answered by the tool
-# description (only for questions about the screen) and FRIDAY_SCREENSHOT=0,
-# not by a per-call prompt.
-RISK.update({"screenshot": Risk.READ_ONLY})
-RISK.update({"query_forecast": Risk.READ_ONLY})
 
 # Tools whose results carry local file content into the conversation, and
 # tools that send conversation content to a third party. Once a turn has used

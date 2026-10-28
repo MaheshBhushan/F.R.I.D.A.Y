@@ -8,8 +8,8 @@ import functools
 
 import pytest
 
-from friday.permissions import PermissionDenied, Risk, risk_of
-from friday.tools import RISK, TOOL_SPECS, TOOLS
+from friday.permissions import RISK, PermissionDenied, Risk, risk_of
+from friday.tools import TOOL_SPECS, TOOLS
 from friday.tools.sanitize import safe_query
 from friday.tools.websearch import MAX_OUTPUT_CHARS, MAX_RESULTS, web_search
 
