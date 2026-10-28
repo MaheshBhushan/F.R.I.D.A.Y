@@ -65,6 +65,8 @@ ACK_REASONING = "checking"
 _ACK_ONLY_ACTIONS = {"noop_ack": "yes", "pause_turn": "one_moment"}
 HARD_STOP_CANCEL_SECONDS = 0.5
 
+_PREEMPTED = "preempted: microphone taken by a higher priority app"
+
 _WAKE_PREFIX = re.compile(r"^\s*(?:(?:hey|okay)\s+)?friday[\s,.:;!?-]*", re.IGNORECASE)
 
 
@@ -325,9 +327,7 @@ class VoiceLoop:
         """
         if self._capture is not None:
             self._capture.reset()
-        if self._detector is not None:
-            with contextlib.suppress(Exception):
-                self._detector.begin_stream()
+        self._arm_detector()
 
     async def _pump(self, frames: Any, stop: asyncio.Event) -> None:
         """Feed captured frames through the detector until the source ends.
@@ -384,6 +384,7 @@ class VoiceLoop:
                 turn_task = asyncio.create_task(_start_turn())
             self._turn_task = turn_task
 
+
     # -- one turn ---------------------------------------------------------
 
     async def handle_detection(
@@ -424,7 +425,7 @@ class VoiceLoop:
             # and is discarded, never resumed: finishing "...delete the old"
             # after a 20-minute call would be actively dangerous.
             turn.preempted = True
-            turn.error = "preempted: microphone taken by a higher priority app"
+            turn.error = _PREEMPTED
             events.emit("turn", "preempted", turn=span.turn_id)
             raise
         except HardStopDetected:
@@ -443,14 +444,8 @@ class VoiceLoop:
                 # Compatibility for file-fed and injected legacy detections.
                 with contextlib.suppress(Exception):
                     self._detector.end_handoff(detection.live)
-            if self.audio_state is not AudioTurnState.SUSPENDED:
-                self._set_audio_state(AudioTurnState.IDLE, turn=span.turn_id)
-                indicator.set_state(indicator.State.IDLE)
-            turn.stages = dict(span.stages)
-            if turn.reply:
-                events.emit("reply", events.quote(turn.reply), tier=turn.tier, spoke=turn.spoke)
-            span.write()
-            self.turns.append(turn)
+            self._settle_idle(turn=span.turn_id)
+            self._finish_turn(turn, span)
         if (
             follow_up
             and self._capture is not None
@@ -552,25 +547,29 @@ class VoiceLoop:
                 await self._respond(transcript, span, turn)
             except asyncio.CancelledError:
                 turn.preempted = True
-                turn.error = "preempted: microphone taken by a higher priority app"
+                turn.error = _PREEMPTED
                 raise
             except Exception as exc:  # noqa: BLE001
                 turn.error = repr(exc)
                 events.emit("turn", "failed", turn=span.turn_id, error=repr(exc))
             finally:
-                turn.stages = dict(span.stages)
-                if turn.reply:
-                    events.emit(
-                        "reply",
-                        events.quote(turn.reply),
-                        tier=turn.tier,
-                        spoke=turn.spoke,
-                    )
-                span.write()
-                self.turns.append(turn)
-        if self.audio_state is not AudioTurnState.SUSPENDED:
-            self._set_audio_state(AudioTurnState.IDLE)
-            indicator.set_state(indicator.State.IDLE)
+                self._finish_turn(turn, span)
+        self._settle_idle()
+
+    def _settle_idle(self, *, turn: str | None = None) -> None:
+        """Return to idle, unless a preemption has already parked the loop."""
+        if self.audio_state is AudioTurnState.SUSPENDED:
+            return
+        self._set_audio_state(AudioTurnState.IDLE, turn=turn)
+        indicator.set_state(indicator.State.IDLE)
+
+    def _finish_turn(self, turn: Turn, span: TurnSpan) -> None:
+        """Record a finished turn: its stages, the reply event, its span, `turns`."""
+        turn.stages = dict(span.stages)
+        if turn.reply:
+            events.emit("reply", events.quote(turn.reply), tier=turn.tier, spoke=turn.spoke)
+        span.write()
+        self.turns.append(turn)
 
     async def _respond(self, transcript: str, span: TurnSpan, turn: Turn) -> None:
         decision = router.classify_and_mark(transcript, span)
@@ -603,17 +602,14 @@ class VoiceLoop:
                         "escalated",
                         frm="state_query",
                         to="reasoning",
-                        why=answer.reason if hasattr(answer, "reason") else None,
+                        why=getattr(answer, "reason", None),
                     )
                     span.turn_kind = Tier.REASONING.value
                     turn.tier = Tier.REASONING.value
 
             if not handled:
                 await self._do_reasoning(transcript, span, turn)
-        except asyncio.CancelledError as exc:
-            await self._memory_call("fail_turn", memory_turn, repr(exc))
-            raise
-        except Exception as exc:
+        except (asyncio.CancelledError, Exception) as exc:
             await self._memory_call("fail_turn", memory_turn, repr(exc))
             raise
 
@@ -809,21 +805,13 @@ class VoiceLoop:
                 await self._respond(transcript, span, turn)
             except asyncio.CancelledError:
                 turn.preempted = True
-                turn.error = "preempted: microphone taken by a higher priority app"
+                turn.error = _PREEMPTED
                 raise
             except Exception as exc:  # noqa: BLE001
                 turn.error = repr(exc)
             finally:
                 self._speak_enabled = previous
-                if turn.reply:
-                    events.emit(
-                        "reply",
-                        events.quote(turn.reply),
-                        tier=turn.tier,
-                        spoke=turn.spoke,
-                    )
-                span.write()
-                self.turns.append(turn)
+                self._finish_turn(turn, span)
             return turn
 
     async def say(self, text: str) -> None:
@@ -928,18 +916,13 @@ def main(argv: list[str] | None = None) -> int:
 
     async def _run() -> None:
         if args.text:
-            span = TurnSpan("pending")
-            span.mark("speech_started")
-            span.mark("stt_final")
-            turn = Turn(turn_id=span.turn_id, transcript=args.text)
             t0 = time.perf_counter()
-            try:
-                await loop._respond(args.text, span, turn)
-            finally:
-                span.write()
+            turn = await loop.ask(args.text)
             print(f"\ntier={turn.tier} spoke={turn.spoke} elapsed={time.perf_counter() - t0:.2f}s")
             if turn.reply:
                 print(f"reply: {turn.reply}")
+            if turn.error:
+                print(f"error: {turn.error}", file=sys.stderr)
             return
         stop = asyncio.Event()
         print("[friday] listening -- say the wake word (Ctrl-C to stop)", file=sys.stderr)
