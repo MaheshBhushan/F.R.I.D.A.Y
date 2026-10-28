@@ -15,7 +15,7 @@ import statistics
 import subprocess
 import sys
 import time
-from typing import AsyncIterator, List, Optional
+from collections.abc import AsyncIterator
 
 from friday.attention import (
     COOLDOWN_S,
@@ -65,11 +65,11 @@ class RecordingAck:
     """Stands in for ack.play_ack: records the cached ack name it would
     have played straight from the bank, and marks the same span stage."""
 
-    def __init__(self, bank: Optional[List[str]] = None) -> None:
-        self.played: List[str] = []
+    def __init__(self, bank: list[str] | None = None) -> None:
+        self.played: list[str] = []
         self.bank = bank
 
-    async def __call__(self, name: str, span: Optional[TurnSpan]) -> None:
+    async def __call__(self, name: str, span: TurnSpan | None) -> None:
         if self.bank is not None:
             assert name in self.bank, f"{name!r} is not in the ack bank"
         self.played.append(name)
@@ -200,7 +200,7 @@ def _dead_dev_server_event(tmp_path) -> Event:
     except subprocess.TimeoutExpired:
         proc.kill()
         proc.wait(timeout=10)
-        raise AssertionError("throwaway child never exited; environment is broken")
+        raise AssertionError("throwaway child never exited; environment is broken") from None
     log = tmp_path / "devserver.log"
     log.write_text(
         "listening on http://localhost:5173\n"

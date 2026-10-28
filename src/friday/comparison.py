@@ -47,7 +47,7 @@ def _equal(actual, expected) -> bool:
                 and all(_equal(actual[k], v) for k, v in expected.items()))
     if isinstance(expected, list):
         return (isinstance(actual, list) and len(actual) == len(expected)
-                and all(_equal(a, e) for a, e in zip(actual, expected)))
+                and all(_equal(a, e) for a, e in zip(actual, expected, strict=True)))
     if type(expected) in (int, float):
         return type(actual) in (int, float) and actual == expected
     return type(actual) is type(expected) and actual == expected

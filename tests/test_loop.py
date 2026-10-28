@@ -9,9 +9,10 @@ from a snapshot that admitted it couldn't answer.
 from __future__ import annotations
 
 import asyncio
-from typing import Any, AsyncIterator, Optional
+from collections.abc import AsyncIterator
+from typing import Any
 
-from friday import brain, loop as loop_mod
+from friday import loop as loop_mod
 from friday.audio.capture import AudioCaptureService
 from friday.brain import FakeLLMTransport, ScriptedTurn
 from friday.voice import tts, wake
@@ -27,7 +28,7 @@ class FakeSTT:
         self.closed = False
         self.entered = False
 
-    async def __aenter__(self) -> "FakeSTT":
+    async def __aenter__(self) -> FakeSTT:
         self.entered = True
         return self
 
@@ -83,7 +84,7 @@ class FakeDetector:
 
     def start(self) -> wake.WakeDetection:
         self.armed = False
-        live: "asyncio.Queue[Optional[bytes]]" = asyncio.Queue()
+        live: asyncio.Queue[bytes | None] = asyncio.Queue()
         live.put_nowait(b"\x00" * 320)
         live.put_nowait(None)
         return wake.WakeDetection(

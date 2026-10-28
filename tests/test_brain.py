@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import functools
 import time
-from typing import AsyncIterator, List
+from collections.abc import AsyncIterator
 
 import pytest
 
@@ -139,7 +139,7 @@ async def test_tokens_arrive_before_the_stream_completes(tmp_path):
     transport = FakeLLMTransport(
         [ScriptedTurn(tokens=tuple(f"tok{i} " for i in range(6)), token_delay=0.02)]
     )
-    received: List[tuple[float, str]] = []
+    received: list[tuple[float, str]] = []
     t0 = time.perf_counter()
     stream = complete("talk to me", transport, context=_ctx(), span=span)
     async for token in stream:
@@ -181,7 +181,7 @@ async def test_three_tool_calls_run_concurrently(tmp_path):
     calls = tuple(
         ToolCall(id=f"c{i}", name="list_processes", input={"name": f"p{i}"}) for i in range(3)
     )
-    starts: List[float] = []
+    starts: list[float] = []
 
     async def slow_tool(name: str = "") -> str:
         starts.append(time.perf_counter())

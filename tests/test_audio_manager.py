@@ -9,9 +9,8 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-from typing import AsyncIterator
+from collections.abc import AsyncIterator
 
-from friday.audio import manager as mgr_mod
 from friday.audio import priority as prio
 from friday.audio.manager import AudioResourceManager, MicState
 

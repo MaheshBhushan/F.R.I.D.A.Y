@@ -85,7 +85,7 @@ def colorize(line: str, *, color: bool = True) -> str:
     elif "timed out" in lowered or "paused" in lowered or "preempted" in lowered:
         level = _COLORS["yellow"]
 
-    def _field(m: "re.Match[str]") -> str:
+    def _field(m: re.Match[str]) -> str:
         return f"{DIM}{m.group(1)}={RESET}{m.group(2)}"
 
     body = _FIELD.sub(_field, rest)

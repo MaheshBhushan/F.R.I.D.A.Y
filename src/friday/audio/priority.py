@@ -39,7 +39,6 @@ import re
 from dataclasses import dataclass
 from enum import IntEnum
 from pathlib import Path
-from typing import Optional
 
 PRIORITY_PATH = Path.home() / ".friday" / "mic-priority.json"
 
@@ -110,7 +109,7 @@ class Owner:
     index: int
     name: str
     binary: str
-    pid: Optional[int]
+    pid: int | None
     priority: int
 
     @property
@@ -143,7 +142,7 @@ def load_priorities() -> dict[str, int]:
 
 
 def priority_of(name: str, binary: str,
-                table: Optional[dict[str, int]] = None) -> int:
+                table: dict[str, int] | None = None) -> int:
     """Strongest (numerically lowest) priority matching either identifier."""
     table = table if table is not None else load_priorities()
     haystack = f"{name} {binary}".lower()
@@ -152,11 +151,11 @@ def priority_of(name: str, binary: str,
 
 
 def parse_owners(text: str, *, own_pid: int,
-                 table: Optional[dict[str, int]] = None) -> list[Owner]:
+                 table: dict[str, int] | None = None) -> list[Owner]:
     """Parse `pactl list source-outputs`, dropping virtual nodes and our own."""
     table = table if table is not None else load_priorities()
     out: list[Owner] = []
-    index: Optional[int] = None
+    index: int | None = None
     client = ""
     props: dict[str, str] = {}
 

@@ -28,8 +28,9 @@ import asyncio
 import os
 import sys
 import time
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, AsyncIterator, Awaitable, Callable, Optional, Protocol
+from typing import Any, Protocol
 
 from friday import review, state
 from friday.core.spans import TurnSpan, start_turn
@@ -88,7 +89,7 @@ class LLMEvent:
     kind: str
     text: str = ""
     tool_calls: tuple[ToolCall, ...] = ()
-    stop_reason: Optional[str] = None
+    stop_reason: str | None = None
     assistant_content: Any = None
 
 
@@ -147,7 +148,7 @@ class ScriptedTurn:
     tokens: tuple[str, ...] = ()
     tool_calls: tuple[ToolCall, ...] = ()
     token_delay: float = 0.0
-    stop_reason: Optional[str] = None
+    stop_reason: str | None = None
 
 
 class FakeLLMTransport:
@@ -222,7 +223,7 @@ class ContextAssembler:
     def __init__(
         self,
         *,
-        memory: Optional[MemoryRetriever] = None,
+        memory: MemoryRetriever | None = None,
         snapshot_fn: Callable[[], dict] = state.snapshot,
         summarize_fn: Callable[[dict], str] = state.summarize,
         stale_ok_seconds: float = STALE_OK_SECONDS,
@@ -231,10 +232,10 @@ class ContextAssembler:
         self._snapshot_fn = snapshot_fn
         self._summarize_fn = summarize_fn
         self._stale_ok = stale_ok_seconds
-        self._task: Optional[asyncio.Task] = None
-        self._cached: Optional[AssembledContext] = None
+        self._task: asyncio.Task | None = None
+        self._cached: AssembledContext | None = None
 
-    def prewarm(self, query: str, *, span: Optional[TurnSpan] = None) -> Optional[asyncio.Task]:
+    def prewarm(self, query: str, *, span: TurnSpan | None = None) -> asyncio.Task | None:
         """Start assembly for `query` in the background. No-op if a fresh
         result or an in-flight task already exists."""
         if self._fresh() is not None or (self._task is not None and not self._task.done()):
@@ -242,7 +243,7 @@ class ContextAssembler:
         self._task = asyncio.create_task(self._assemble(query, span))
         return self._task
 
-    async def get(self, query: str, *, span: Optional[TurnSpan] = None) -> AssembledContext:
+    async def get(self, query: str, *, span: TurnSpan | None = None) -> AssembledContext:
         """Return context for `query`, waiting on a prewarm if one is running."""
         if self._task is not None and not self._task.done():
             await self._task
@@ -257,14 +258,14 @@ class ContextAssembler:
             )
         return await self._assemble(query, span)
 
-    def _fresh(self) -> Optional[AssembledContext]:
+    def _fresh(self) -> AssembledContext | None:
         if self._cached is None:
             return None
         if (time.monotonic() - self._cached.assembled_at) > self._stale_ok:
             return None
         return self._cached
 
-    async def _assemble(self, query: str, span: Optional[TurnSpan]) -> AssembledContext:
+    async def _assemble(self, query: str, span: TurnSpan | None) -> AssembledContext:
         # summarize() rather than the raw snapshot: the snapshot is a large
         # JSON blob and only the summary belongs in a prompt.
         snap, memory = await asyncio.gather(
@@ -286,7 +287,7 @@ class ContextAssembler:
 # --- prompt assembly --------------------------------------------------------
 
 
-def _volatile_block(context: Optional[AssembledContext]) -> Optional[dict]:
+def _volatile_block(context: AssembledContext | None) -> dict | None:
     if context is None:
         return None
     parts = [f"{WORLD_STATE_OPEN}\n{context.world_state}\n{WORLD_STATE_CLOSE}"]
@@ -298,9 +299,9 @@ def _volatile_block(context: Optional[AssembledContext]) -> Optional[dict]:
 def build_request(
     transcript: str,
     *,
-    context: Optional[AssembledContext] = None,
-    history: Optional[list] = None,
-    tools: Optional[list[dict]] = None,
+    context: AssembledContext | None = None,
+    history: list | None = None,
+    tools: list[dict] | None = None,
     system: str = SYSTEM_PROMPT,
     model: str = MODEL,
     max_tokens: int = MAX_TOKENS,
@@ -373,9 +374,9 @@ class TurnResult:
 
 async def _run_tool_round(
     calls: tuple[ToolCall, ...],
-    approve: Optional[ApprovalCallback],
-    registry: Optional[dict[str, Callable[..., Awaitable[str]]]],
-    span: Optional[TurnSpan],
+    approve: ApprovalCallback | None,
+    registry: dict[str, Callable[..., Awaitable[str]]] | None,
+    span: TurnSpan | None,
     tainted: bool = False,
 ) -> list[ToolOutcome]:
     """Execute every tool of one round concurrently. A five-call diagnostic
@@ -402,14 +403,14 @@ async def complete(
     transcript: str,
     transport: Transport,
     *,
-    context: Optional[AssembledContext] = None,
-    assembler: Optional[ContextAssembler] = None,
-    history: Optional[list] = None,
-    approve: Optional[ApprovalCallback] = None,
-    registry: Optional[dict[str, Callable[..., Awaitable[str]]]] = None,
-    tools: Optional[list[dict]] = None,
-    span: Optional[TurnSpan] = None,
-    result: Optional[TurnResult] = None,
+    context: AssembledContext | None = None,
+    assembler: ContextAssembler | None = None,
+    history: list | None = None,
+    approve: ApprovalCallback | None = None,
+    registry: dict[str, Callable[..., Awaitable[str]]] | None = None,
+    tools: list[dict] | None = None,
+    span: TurnSpan | None = None,
+    result: TurnResult | None = None,
     max_rounds: int = MAX_TOOL_ROUNDS,
 ) -> AsyncIterator[str]:
     """Run one reasoning turn, yielding text tokens as they arrive.

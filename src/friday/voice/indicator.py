@@ -28,10 +28,11 @@ import contextlib
 import os
 import sys
 import threading
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from enum import Enum
 from pathlib import Path
-from typing import Callable, IO, Iterator, Optional
+from typing import IO
 
 STATUS_PATH = Path.home() / ".friday" / "status"
 
@@ -63,10 +64,10 @@ _state = State.IDLE
 # indicator is enabled: FRIDAY_INDICATOR=0 means "do not draw", not "do not
 # report". The gateway relies on this to push state.changed to its clients in
 # a headless service where there is no tty at all.
-_observers: "list[Callable[[State, str], None]]" = []
+_observers: list[Callable[[State, str], None]] = []
 
 
-def subscribe(callback: "Callable[[State, str], None]") -> None:
+def subscribe(callback: Callable[[State, str], None]) -> None:
     """Register `callback(state, detail)`, invoked on every transition.
 
     Callbacks run on whichever thread called set_state, outside the module
@@ -79,7 +80,7 @@ def subscribe(callback: "Callable[[State, str], None]") -> None:
             _observers.append(callback)
 
 
-def unsubscribe(callback: "Callable[[State, str], None]") -> None:
+def unsubscribe(callback: Callable[[State, str], None]) -> None:
     with _lock:
         with contextlib.suppress(ValueError):
             _observers.remove(callback)
@@ -117,7 +118,7 @@ def _publish(state: State) -> None:
 
 
 def set_state(state: State, *, detail: str = "",
-              stream: Optional[IO[str]] = None) -> None:
+              stream: IO[str] | None = None) -> None:
     """Transition to `state`, redrawing the line and updating the state file.
 
     `detail` is appended after a separator, for states that mean nothing on
@@ -157,7 +158,7 @@ def _notify(state: State, detail: str) -> None:
 
 @contextmanager
 def during(state: State, *, back_to: State = State.IDLE,
-           stream: Optional[IO[str]] = None) -> Iterator[None]:
+           stream: IO[str] | None = None) -> Iterator[None]:
     """Hold `state` for the block, then return to `back_to` even on error.
 
     The `finally` is the point: a synthesis failure or a hard preempt mid
@@ -170,7 +171,7 @@ def during(state: State, *, back_to: State = State.IDLE,
         set_state(back_to, stream=stream)
 
 
-def settle(*, stream: Optional[IO[str]] = None) -> None:
+def settle(*, stream: IO[str] | None = None) -> None:
     """Return to IDLE, but only if still THINKING.
 
     A reasoning turn's token stream is consumed by the speaker, so by the time
@@ -183,7 +184,7 @@ def settle(*, stream: Optional[IO[str]] = None) -> None:
         set_state(State.IDLE, stream=stream)
 
 
-def clear(*, stream: Optional[IO[str]] = None) -> None:
+def clear(*, stream: IO[str] | None = None) -> None:
     """Erase the status line, e.g. at shutdown."""
     if not _enabled():
         return

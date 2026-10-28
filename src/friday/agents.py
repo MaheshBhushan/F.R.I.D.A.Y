@@ -76,12 +76,12 @@ def classify_status(text: str) -> str:
             trimmed_end = i + 1
     lines = lines[:trimmed_end]
 
-    permission_zone = [l.lower() for l in lines[-12:]]
+    permission_zone = [line.lower() for line in lines[-12:]]
     for line in permission_zone:
         if any(m in line for m in PERMISSION_MARKERS):
             return "permission"
 
-    recent = [l.lower() for l in lines[-6:]]
+    recent = [line.lower() for line in lines[-6:]]
     for line in recent:
         if any(m in line for m in RUNNING_MARKERS):
             return "running"

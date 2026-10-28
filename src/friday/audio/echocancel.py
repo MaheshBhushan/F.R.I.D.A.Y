@@ -29,9 +29,10 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import re
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Awaitable, Callable, Optional
 
+from friday.core import events
 from friday.voice import devices
 
 SOURCE_NAME = "echo-cancel-source"
@@ -56,7 +57,6 @@ _MODULE_ID_RE = re.compile(r"^\s*(\d+)\s*$")
 
 PactlRunner = Callable[..., Awaitable[tuple[int, str]]]
 
-from friday.core import events
 
 
 @dataclass
@@ -65,7 +65,7 @@ class Status:
 
     available: bool          # is an echo-cancelled source usable?
     owned: bool              # did WE load it (and must therefore unload it)?
-    module_id: Optional[int]
+    module_id: int | None
     reason: str
 
 
@@ -91,7 +91,7 @@ async def _run_pactl(*args: str) -> tuple[int, str]:
     )
     try:
         out, _ = await asyncio.wait_for(proc.communicate(), timeout=PACTL_TIMEOUT_S)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         # Kill, don't terminate: a pactl wedged on a server round-trip is not
         # reliably responsive to SIGTERM, and orphaning it would leave a child
         # for systemd to shoot down later -- the exact symptom being fixed.
@@ -115,7 +115,7 @@ class EchoCancelModule:
         sink: str = SINK_NAME,
         mic: str = devices.MIC_SOURCE,
         speaker: str = devices.SPEAKER_SINK,
-        pactl: Optional[PactlRunner] = None,
+        pactl: PactlRunner | None = None,
         appear_timeout: float = APPEAR_TIMEOUT_S,
     ) -> None:
         self._source = source

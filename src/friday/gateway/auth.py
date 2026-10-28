@@ -25,7 +25,6 @@ import stat
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 from friday.gateway.protocol import ErrorCode, ProtocolError
 
@@ -41,7 +40,7 @@ MAX_FAILURES = 5
 WINDOW_SECONDS = 60.0
 
 
-def load_or_create_token(path: Optional[Path] = None) -> str:
+def load_or_create_token(path: Path | None = None) -> str:
     """Return the gateway token, minting one on first run.
 
     The env var wins when set so a test or a container can inject a known
@@ -99,7 +98,7 @@ class RateLimiter:
     max_failures: int = MAX_FAILURES
     window_seconds: float = WINDOW_SECONDS
     # Injectable clock so the tests can prove window expiry without sleeping.
-    now: "object" = time.monotonic
+    now: object = time.monotonic
     _failures: dict[str, list[float]] = field(default_factory=dict)
 
     def _prune(self, peer: str, at: float) -> list[float]:

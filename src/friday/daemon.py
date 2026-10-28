@@ -32,7 +32,6 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Optional
 
 FRIDAY_HOME = Path(os.environ.get("FRIDAY_HOME", Path.home() / ".friday"))
 PID_PATH = FRIDAY_HOME / "friday.pid"
@@ -63,9 +62,9 @@ class Supervisor(str, Enum):
 class Status:
     running: bool
     healthy: bool
-    pid: Optional[int]
+    pid: int | None
     supervisor: Supervisor
-    health: Optional[dict] = None
+    health: dict | None = None
     detail: str = ""
 
 
@@ -118,7 +117,7 @@ def _is_friday(pid: int) -> bool:
     return "friday" in line and ("-m friday" in line or "friday.core" in line)
 
 
-def read_pid() -> Optional[int]:
+def read_pid() -> int | None:
     """The recorded PID, if it names a live FRIDAY. Cleans up if it does not."""
     try:
         pid = int(PID_PATH.read_text().strip())
@@ -153,7 +152,7 @@ def _clear_pid() -> None:
 
 # ------------------------------------------------------------------ health
 
-def health(timeout: float = HEALTH_TIMEOUT_S) -> Optional[dict]:
+def health(timeout: float = HEALTH_TIMEOUT_S) -> dict | None:
     """Ask the gateway how it is. None means "did not answer", not "unhealthy".
 
     Deliberately returns None rather than raising: every caller here treats an
@@ -161,7 +160,7 @@ def health(timeout: float = HEALTH_TIMEOUT_S) -> Optional[dict]:
     """
     from friday.gateway.client import GatewayClient
 
-    async def _probe() -> Optional[dict]:
+    async def _probe() -> dict | None:
         client = GatewayClient()
         try:
             await asyncio.wait_for(client.open(), timeout=timeout)
@@ -181,7 +180,7 @@ def health(timeout: float = HEALTH_TIMEOUT_S) -> Optional[dict]:
         return None
 
 
-def _systemd_pid() -> Optional[int]:
+def _systemd_pid() -> int | None:
     result = _systemctl("show", UNIT_NAME, "--property=MainPID", "--value")
     if result.returncode != 0:
         return None
@@ -424,7 +423,7 @@ def reap_echo_cancel() -> int:
 
 # ------------------------------------------------------------ env file
 
-def load_env_file(path: Optional[Path] = None) -> dict[str, str]:
+def load_env_file(path: Path | None = None) -> dict[str, str]:
     """Parse `~/.friday/env` into a dict. Missing file is not an error.
 
     Parsed in Python rather than sourced through a shell. Sourcing would handle

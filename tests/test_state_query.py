@@ -61,7 +61,7 @@ def _run_turn(tmp_path, text: str) -> dict:
     spans_path = tmp_path / f"spans-{_turn_counter[0]}.jsonl"
     with start_turn("state_query", path=spans_path) as span:
         result = state_query.answer(text, span=span)
-    records = [json.loads(l) for l in spans_path.read_text().splitlines()]
+    records = [json.loads(line) for line in spans_path.read_text().splitlines()]
     assert len(records) == 1
     return records[0], result
 
@@ -134,7 +134,7 @@ def test_dirty_state_matches_git_status(tmp_path):
 def test_is_running_matches_ss_for_a_real_listener(tmp_path):
     ss_out = subprocess.run(["ss", "-tln"], capture_output=True, text=True, check=True).stdout
     # Find any port actually listening so the query is grounded in truth.
-    lines = [l for l in ss_out.splitlines()[1:] if l.strip()]
+    lines = [line for line in ss_out.splitlines()[1:] if line.strip()]
     assert lines, "expected at least one listening socket on this machine to verify against"
     snap = state_mod.snapshot()
     ports = snap.get("listening_ports") or []
@@ -214,7 +214,7 @@ def test_listen_main_persists_span_via_with_form(tmp_path, monkeypatch):
     asyncio.run(wake_mod._listen_main())
 
     assert spans_path.exists(), "no spans file written - persistence bug still present"
-    records = [json.loads(l) for l in spans_path.read_text().splitlines()]
+    records = [json.loads(line) for line in spans_path.read_text().splitlines()]
     assert len(records) == 1
     assert records[0]["turn_kind"] == "reflex"
     assert "speech_started" in records[0]["stages"]

@@ -6,7 +6,8 @@ import asyncio
 import contextlib
 import threading
 import time
-from typing import Any, AsyncIterator, Optional
+from collections.abc import AsyncIterator
+from typing import Any
 
 import pytest
 
@@ -26,7 +27,7 @@ class Source:
 
 
 class Detector:
-    def __init__(self, wake_on: Optional[int] = None) -> None:
+    def __init__(self, wake_on: int | None = None) -> None:
         self.wake_on = wake_on
         self.calls = 0
         self.armed = 0
@@ -136,7 +137,7 @@ class Sink:
 
 
 def _detection() -> wake.WakeDetection:
-    live: "asyncio.Queue[Optional[bytes]]" = asyncio.Queue()
+    live: asyncio.Queue[bytes | None] = asyncio.Queue()
     live.put_nowait(None)
     return wake.WakeDetection(
         model="friday",

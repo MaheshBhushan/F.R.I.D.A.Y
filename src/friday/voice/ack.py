@@ -28,7 +28,6 @@ import threading
 import time
 import wave
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 import sounddevice as sd
@@ -55,9 +54,9 @@ def list_acks() -> list[str]:
 
 def play_ack(
     name: str,
-    span: Optional[TurnSpan] = None,
+    span: TurnSpan | None = None,
     blocking: bool = True,
-    stop_event: Optional[threading.Event] = None,
+    stop_event: threading.Event | None = None,
 ) -> None:
     """Play the ack named `name` (matches a stem in acks/*.wav).
 

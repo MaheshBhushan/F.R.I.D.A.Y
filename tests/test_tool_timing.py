@@ -30,7 +30,7 @@ def test_model_wait_excludes_tools_and_token_consumer_time(monkeypatch, tmp_path
         return "forecast"
 
     async def run():
-        async for token in brain.complete("forecast", Transport(), span=span,
+        async for _token in brain.complete("forecast", Transport(), span=span,
                                           registry={"query_forecast": tool}):
             clock[0] += 1_000_000_000  # Time spent speaking/consuming each token.
     asyncio.run(run())

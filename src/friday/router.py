@@ -24,9 +24,9 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 from friday.core.spans import TurnSpan
+from friday.tiers import intent as _intent
 
 
 class Tier(Enum):
@@ -40,8 +40,8 @@ class RouteDecision:
     """Result of classify(). `tier` is None when the prefix is ambiguous
     and the caller should wait for more transcript before acting."""
 
-    tier: Optional[Tier]
-    matched: Optional[str] = None  # which trigger/pattern matched, for debugging/tests
+    tier: Tier | None
+    matched: str | None = None  # which trigger/pattern matched, for debugging/tests
 
 
 # --- Tier 1: hardcoded reflex phrases ---------------------------------------
@@ -101,19 +101,18 @@ TIER1_ACTIONS = {
 # matcher for paraphrases ("battery level?", "which branch", "is anything
 # listening on 8080"). See that module for the design.
 
-from friday.tiers import intent as _intent
 
 _normalize = _intent.normalize
 
 
-def _matches_tier1(text: str) -> Optional[str]:
-    for phrase, pattern in zip(_TIER1_ALL_PHRASES, _TIER1_PATTERNS):
+def _matches_tier1(text: str) -> str | None:
+    for phrase, pattern in zip(_TIER1_ALL_PHRASES, _TIER1_PATTERNS, strict=True):
         if pattern.match(text):
             return phrase
     return None
 
 
-def _matches_tier2(text: str) -> Optional[str]:
+def _matches_tier2(text: str) -> str | None:
     return _intent.is_state_query(text)
 
 

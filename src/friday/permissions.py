@@ -15,9 +15,9 @@ Not a policy engine: a dict, a lookup, and one async check.
 from __future__ import annotations
 
 import json
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from enum import Enum
-from typing import Awaitable, Callable, Optional
 
 
 class Risk(Enum):
@@ -86,7 +86,7 @@ def render_action(tool: str, arguments: dict) -> str:
 async def authorize(
     tool: str,
     arguments: dict,
-    approve: Optional[ApprovalCallback] = None,
+    approve: ApprovalCallback | None = None,
     *,
     force_approval: bool = False,
 ) -> ApprovalRequest:

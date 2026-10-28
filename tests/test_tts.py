@@ -13,7 +13,7 @@ import contextlib
 import random
 import statistics
 import time
-from typing import AsyncIterator, List, Tuple
+from collections.abc import AsyncIterator
 
 import pytest
 
@@ -36,7 +36,7 @@ class RecordingOutput:
 
     def __init__(self, write_sleep: float = 0.0) -> None:
         self.write_sleep = write_sleep
-        self.writes: List[Tuple[float, int]] = []
+        self.writes: list[tuple[float, int]] = []
         self.closed = False
 
     def write(self, chunk: bytes) -> None:
@@ -48,7 +48,7 @@ class RecordingOutput:
         self.closed = True
 
 
-async def _stream_from(sentences: List[str], delay: float, events: list) -> AsyncIterator[str]:
+async def _stream_from(sentences: list[str], delay: float, events: list) -> AsyncIterator[str]:
     """Fake LLM token stream: yields one sentence's words at a time with a
     delay between sentences, and logs when it (the stream) is exhausted."""
     for i, sentence in enumerate(sentences):
@@ -89,10 +89,10 @@ def test_first_audio_precedes_stream_exhaustion():
     assert "first_content_audio" in span.stages
     assert len(transport.synthesized) == 5
 
-    stream_exhausted_ns = next(t for name, t in events if name == "stream_exhausted")
+    assert any(name == "stream_exhausted" for name, _ in events)
     # first_content_audio is a monotonic offset from the span's own start;
-    # stream_exhausted_ns is wall-clock from time.perf_counter(). Convert the
-    # span offset to the same clock isn't directly possible, so instead prove
+    # the stream_exhausted event is wall-clock from time.perf_counter(). The
+    # span offset cannot be converted to that clock directly, so instead prove
     # overlap the way the criterion asks: audio started well before the last
     # of 5 sentences (spaced 50ms apart, ~200ms total) was even requested.
     first_audio_offset_s = span.stages["first_content_audio"] / 1e9
@@ -100,7 +100,7 @@ def test_first_audio_precedes_stream_exhaustion():
     print("\n--- event timeline (criterion 1) ---")
     print(f"tts_started        @ {tts_started_offset_s*1000:.1f}ms (offset from turn start)")
     print(f"first_content_audio @ {first_audio_offset_s*1000:.1f}ms (offset from turn start)")
-    print(f"5 sentences requested with 50ms spacing => ~200ms total generation time")
+    print("5 sentences requested with 50ms spacing => ~200ms total generation time")
     print(f"span record: {span.to_record()}")
 
     # The whole point: first_content_audio fires immediately after the FIRST

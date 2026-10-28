@@ -11,7 +11,7 @@ import uuid
 from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from friday.core import events
 from friday.memory import DEFAULT_DB_PATH
@@ -37,7 +37,7 @@ def _env_int(name: str, default: int, minimum: int, maximum: int) -> int:
 
 @dataclass(frozen=True)
 class ConversationMessage:
-    id: Optional[int]
+    id: int | None
     session_id: str
     turn_id: str
     role: str
@@ -53,7 +53,7 @@ class ConversationTurn:
     assistant: ConversationMessage
     route_tier: str = ""
     interrupted: bool = False
-    metadata: Optional[dict[str, Any]] = None
+    metadata: dict[str, Any] | None = None
 
 
 _MIGRATIONS = (
@@ -111,8 +111,8 @@ class SessionMemory:
         self,
         path: Path = DEFAULT_DB_PATH,
         *,
-        turn_limit: Optional[int] = None,
-        context_chars: Optional[int] = None,
+        turn_limit: int | None = None,
+        context_chars: int | None = None,
         clock=time.time,
     ) -> None:
         self.path = Path(path)
@@ -137,7 +137,7 @@ class SessionMemory:
         self._lock = asyncio.Lock()
         self._cache: deque[ConversationTurn] = deque(maxlen=self.turn_limit)
         self._pending: dict[str, ConversationMessage] = {}
-        self._conn: Optional[sqlite3.Connection] = None
+        self._conn: sqlite3.Connection | None = None
         self._errors = 0
         self.session_id = uuid.uuid4().hex
         try:
@@ -213,7 +213,7 @@ class SessionMemory:
             if turn is not None:
                 self._cache.append(turn)
 
-    def _load_turn(self, row: sqlite3.Row) -> Optional[ConversationTurn]:
+    def _load_turn(self, row: sqlite3.Row) -> ConversationTurn | None:
         assert self._conn is not None
         messages = self._conn.execute(
             "SELECT * FROM conversation_messages WHERE session_id = ? AND turn_id = ? "
@@ -272,7 +272,7 @@ class SessionMemory:
             restored_turns=len(self._cache), persistent=self._conn is not None,
         )
 
-    async def recent_turns(self, limit: Optional[int] = None) -> list[ConversationTurn]:
+    async def recent_turns(self, limit: int | None = None) -> list[ConversationTurn]:
         async with self._lock:
             count = self.turn_limit if limit is None else max(0, min(limit, self.turn_limit))
             return list(self._cache)[-count:] if count else []
@@ -281,9 +281,9 @@ class SessionMemory:
         self,
         user_text: str,
         *,
-        turn_id: Optional[str] = None,
+        turn_id: str | None = None,
         route_tier: str = "",
-        metadata: Optional[dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> str:
         text = user_text.strip()
         if not text:
@@ -327,7 +327,7 @@ class SessionMemory:
         *,
         route_tier: str = "",
         interrupted: bool = False,
-        metadata: Optional[dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> bool:
         text = assistant_text.strip()
         if not turn_id or not text:
@@ -416,7 +416,7 @@ class SessionMemory:
                 self._report_unavailable("fail")
         events.emit("memory-turn", turn=turn_id, status="failed")
 
-    async def context_messages(self, limit: Optional[int] = None) -> list[dict[str, str]]:
+    async def context_messages(self, limit: int | None = None) -> list[dict[str, str]]:
         started = time.perf_counter()
         turns = await self.recent_turns(limit)
         selected: list[ConversationTurn] = []

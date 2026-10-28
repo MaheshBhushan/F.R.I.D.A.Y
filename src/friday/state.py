@@ -336,12 +336,12 @@ def _main() -> None:
     cold_ms = (time.perf_counter() - t0) * 1000
 
     t1 = time.perf_counter()
-    snap2 = snapshot()
+    snapshot()
     warm_cached_ms = (time.perf_counter() - t1) * 1000
 
     time.sleep(_TTL_SECONDS + 0.05)
     t2 = time.perf_counter()
-    snap3 = snapshot()
+    snapshot()
     warm_uncached_ms = (time.perf_counter() - t2) * 1000
 
     print(json.dumps(snap, indent=2))

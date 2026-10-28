@@ -16,11 +16,13 @@ from __future__ import annotations
 
 import re
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable, Optional
 
 from friday import state as state_mod
 from friday.core.spans import TurnSpan
+from friday.tiers.intent import classify_kind as _classify_kind
+from friday.tiers.intent import normalize as _normalize
 
 # Names T5 labels "notable" that we treat as coding-agent sessions rather
 # than generic dev tooling, for the collapsed speech phrasing.
@@ -31,8 +33,6 @@ _AGENT_NAMES = ("claude", "codex")
 # `friday.tiers.intent`, shared with the router: router.py decides *whether*
 # something is routed here, intent.classify_kind decides *what kind* of state
 # question it is, and both consult the same table.
-from friday.tiers.intent import classify_kind as _classify_kind
-from friday.tiers.intent import normalize as _normalize
 
 
 @dataclass
@@ -44,7 +44,7 @@ class StateAnswer:
     text: str
     answerable: bool
     escalate: bool
-    kind: Optional[str]
+    kind: str | None
 
 
 def _collapse_procs(procs: list[dict]) -> list[str]:
@@ -67,13 +67,13 @@ def _collapse_procs(procs: list[dict]) -> list[str]:
     return bits
 
 
-def _dirty_suffix(git: Optional[dict]) -> str:
+def _dirty_suffix(git: dict | None) -> str:
     if git and git.get("dirty"):
         return " (dirty)"
     return ""
 
 
-def _fmt_branch(snap: dict, match: Optional[re.Match]) -> StateAnswer:
+def _fmt_branch(snap: dict, match: re.Match | None) -> StateAnswer:
     git = snap.get("git")
     if not git:
         return StateAnswer(
@@ -90,7 +90,7 @@ def _fmt_branch(snap: dict, match: Optional[re.Match]) -> StateAnswer:
     )
 
 
-def _fmt_agent_doing(snap: dict, match: Optional[re.Match]) -> StateAnswer:
+def _fmt_agent_doing(snap: dict, match: re.Match | None) -> StateAnswer:
     target = match.group(1).lower() if match else ""
     panes = snap.get("tmux_panes") or []
     hits = [p for p in panes if target in p["command"].lower() or target in p["session"].lower()]
@@ -118,7 +118,7 @@ def _fmt_agent_doing(snap: dict, match: Optional[re.Match]) -> StateAnswer:
     )
 
 
-def _fmt_whats_running(snap: dict, match: Optional[re.Match]) -> StateAnswer:
+def _fmt_whats_running(snap: dict, match: re.Match | None) -> StateAnswer:
     bits = _collapse_procs(snap.get("notable_processes") or [])
     ports = [p for p in (snap.get("listening_ports") or []) if p["process"]]
     if not bits and not ports:
@@ -142,7 +142,7 @@ def _fmt_whats_running(snap: dict, match: Optional[re.Match]) -> StateAnswer:
     )
 
 
-def _fmt_whats_happening(snap: dict, match: Optional[re.Match]) -> StateAnswer:
+def _fmt_whats_happening(snap: dict, match: re.Match | None) -> StateAnswer:
     git = snap.get("git")
     running = _fmt_whats_running(snap, None)
     parts = []
@@ -157,7 +157,7 @@ def _fmt_whats_happening(snap: dict, match: Optional[re.Match]) -> StateAnswer:
     )
 
 
-def _fmt_in_progress(snap: dict, match: Optional[re.Match]) -> StateAnswer:
+def _fmt_in_progress(snap: dict, match: re.Match | None) -> StateAnswer:
     git = snap.get("git")
     panes = snap.get("tmux_panes") or []
     parts = []
@@ -181,7 +181,7 @@ def _fmt_in_progress(snap: dict, match: Optional[re.Match]) -> StateAnswer:
     )
 
 
-def _fmt_is_running(snap: dict, match: Optional[re.Match]) -> StateAnswer:
+def _fmt_is_running(snap: dict, match: re.Match | None) -> StateAnswer:
     target = match.group(1).lower() if match else ""
     # "is the dev server running" captures "the dev server"; strip the
     # article so the substring test against process/pane names can hit.
@@ -222,7 +222,7 @@ def _fmt_is_running(snap: dict, match: Optional[re.Match]) -> StateAnswer:
     )
 
 
-def _fmt_resources(snap: dict, match: Optional[re.Match]) -> StateAnswer:
+def _fmt_resources(snap: dict, match: re.Match | None) -> StateAnswer:
     res = snap.get("resources") or {}
     bits = []
     if res.get("load_avg"):
@@ -249,7 +249,7 @@ def _fmt_resources(snap: dict, match: Optional[re.Match]) -> StateAnswer:
     )
 
 
-def _fmt_unanswerable_failures(snap: dict, match: Optional[re.Match]) -> StateAnswer:
+def _fmt_unanswerable_failures(snap: dict, match: re.Match | None) -> StateAnswer:
     return StateAnswer(
         "I don't have test or failure status in what I'm tracking right now - "
         "I only see running processes, ports, and git state, not build/test results.",
@@ -259,7 +259,7 @@ def _fmt_unanswerable_failures(snap: dict, match: Optional[re.Match]) -> StateAn
     )
 
 
-_FORMATTERS: dict[str, Callable[[dict, Optional[re.Match]], StateAnswer]] = {
+_FORMATTERS: dict[str, Callable[[dict, re.Match | None], StateAnswer]] = {
     "branch": _fmt_branch,
     "agent_doing": _fmt_agent_doing,
     "whats_running": _fmt_whats_running,
@@ -273,7 +273,7 @@ _FORMATTERS: dict[str, Callable[[dict, Optional[re.Match]], StateAnswer]] = {
 }
 
 
-def answer(text: str, span: Optional[TurnSpan] = None) -> StateAnswer:
+def answer(text: str, span: TurnSpan | None = None) -> StateAnswer:
     """Answer a STATE_QUERY-classified `text` from live state.
 
     Marks `context_ready` once the snapshot is in hand and `task_complete`

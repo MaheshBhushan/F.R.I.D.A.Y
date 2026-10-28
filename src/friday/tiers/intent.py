@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Optional
 
 # --- normalisation ----------------------------------------------------------
 
@@ -133,8 +132,7 @@ _IMPERATIVE_VETO = frozenset(
         "switch", "change", "set", "update", "upgrade", "download", "search",
         "find", "remind", "schedule", "send", "email", "call", "cancel",
         "wait", "summarize", "summarise", "explain", "read", "edit", "move",
-        "copy", "rename", "clear", "clean", "free", "kill", "spawn", "deploy",
-        "test", "mute", "play", "pause", "resume", "turn",
+        "copy", "rename", "clear", "clean", "free", "spawn", "test", "mute", "play", "pause", "resume", "turn",
         # Requests ("can you check...") are tasks for the reasoning tier.
         "can", "could", "would", "will", "should",
     }
@@ -174,7 +172,7 @@ def _tokens(norm: str) -> list[str]:
     return [_SYNONYMS.get(t, t) for t in raw]
 
 
-def fuzzy_kind(norm: str) -> tuple[Optional[str], Optional[re.Match]]:
+def fuzzy_kind(norm: str) -> tuple[str | None, re.Match | None]:
     """Best-effort kind for a *normalised* utterance the exact shapes missed.
 
     Returns (kind, match) like the regex layer. `match` carries the captured
@@ -221,7 +219,7 @@ def fuzzy_kind(norm: str) -> tuple[Optional[str], Optional[re.Match]]:
     return None, None
 
 
-def classify_kind(norm: str) -> tuple[Optional[str], Optional[re.Match]]:
+def classify_kind(norm: str) -> tuple[str | None, re.Match | None]:
     """Exact shapes first, then the fuzzy layer. Input must be normalised."""
     for kind, pattern in PATTERNS:
         m = pattern.match(norm)
@@ -230,10 +228,10 @@ def classify_kind(norm: str) -> tuple[Optional[str], Optional[re.Match]]:
     return fuzzy_kind(norm)
 
 
-def is_state_query(norm: str) -> Optional[str]:
+def is_state_query(norm: str) -> str | None:
     """Router entry point: the matched kind, or None. Marks fuzzy matches
     with a `fuzzy:` prefix so spans and tests can tell the layers apart."""
-    for kind, pattern in PATTERNS:
+    for _kind, pattern in PATTERNS:
         if pattern.match(norm):
             return pattern.pattern
     kind, _ = fuzzy_kind(norm)

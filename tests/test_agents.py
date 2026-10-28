@@ -17,8 +17,8 @@ import time
 import pytest
 
 from friday import agents
-from friday.permissions import PermissionDenied, Risk, risk_of
-from friday.tools import TOOLS, execute
+from friday.permissions import Risk, risk_of
+from friday.tools import execute
 
 pytestmark = pytest.mark.skipif(shutil.which("tmux") is None, reason="tmux not installed")
 
@@ -108,7 +108,7 @@ def test_spawn_write_task_and_detect_completion():
 
     # First poll: process just started printing "start".
     time.sleep(0.3)
-    p0 = agents.poll(session)
+    agents.poll(session)
     assert "start" in agents.capture(session)
 
     # Mid-run: "esc to interrupt" marker present -> running.

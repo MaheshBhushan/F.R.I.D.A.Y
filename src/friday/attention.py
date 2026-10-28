@@ -26,8 +26,9 @@ from __future__ import annotations
 
 import asyncio
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable, Optional
+from typing import Any
 
 from friday.brain import complete
 from friday.core.spans import TurnSpan, start_turn
@@ -158,7 +159,7 @@ async def _default_investigate(event: Event) -> str:
         return str(tail).strip()
     log_path = event.data.get("log_path")
     if log_path:
-        with open(log_path, "r", errors="replace") as f:
+        with open(log_path, errors="replace") as f:
             return "\n".join(f.read().splitlines()[-8:]).strip()
     return str(event.data.get("cause", "")).strip()
 
@@ -176,7 +177,7 @@ async def enrich(
     """
     try:
         return await asyncio.wait_for(investigate(event), timeout)
-    except (asyncio.TimeoutError, OSError):
+    except (TimeoutError, OSError):
         return ""
 
 
@@ -202,7 +203,7 @@ def compose_prompt(event: Event, evidence: str) -> str:
 # --- the attention layer ----------------------------------------------------
 
 
-async def _play_ack_default(name: str, span: Optional[TurnSpan]) -> None:
+async def _play_ack_default(name: str, span: TurnSpan | None) -> None:
     from friday.voice.ack import play_ack
 
     await asyncio.to_thread(play_ack, name, span)
@@ -218,12 +219,12 @@ class Attention:
         transport: Any,
         *,
         ack_name: str = "sir",
-        play_ack: Callable[[str, Optional[TurnSpan]], Awaitable[None]] = _play_ack_default,
+        play_ack: Callable[[str, TurnSpan | None], Awaitable[None]] = _play_ack_default,
         investigate: Callable[[Event], Awaitable[str]] = _default_investigate,
         threshold: int = THRESHOLD,
         enrich_timeout: float = ENRICH_TIMEOUT_S,
         memory: Any = None,
-        spans_path: Optional[Any] = None,
+        spans_path: Any | None = None,
         now: Callable[[], float] = time.monotonic,
     ) -> None:
         self._speaker = speaker
@@ -283,7 +284,7 @@ class Attention:
         await self._speaker.speak(_tokens(), span=span)
         return "".join(spoken)
 
-    async def handle(self, event: Event) -> Optional[str]:
+    async def handle(self, event: Event) -> str | None:
         """Score, gate, enrich, speak. Returns the spoken text, or None if
         the event was not worth interrupting for."""
         allowed, reason = self.gate(event)
@@ -310,7 +311,7 @@ class Attention:
             )
         return text
 
-    async def run(self, queue: "asyncio.Queue[Optional[Event]]") -> None:
+    async def run(self, queue: asyncio.Queue[Event | None]) -> None:
         """Drain `queue` until a `None` sentinel arrives."""
         while True:
             event = await queue.get()
@@ -323,10 +324,10 @@ class Attention:
 
 
 def diff_events(
-    prev: Optional[dict],
+    prev: dict | None,
     snap: dict,
-    prev_agents: Optional[dict] = None,
-    agents: Optional[dict] = None,
+    prev_agents: dict | None = None,
+    agents: dict | None = None,
 ) -> list[Event]:
     """Turn the change between two observations into events. `agents` maps
     session name -> the dict `agents.poll()` returned."""
@@ -386,16 +387,16 @@ def diff_events(
 
 
 async def watch(
-    queue: "asyncio.Queue[Optional[Event]]",
+    queue: asyncio.Queue[Event | None],
     *,
     snapshot: Callable[[], dict],
     poll_agents: Callable[[], dict] = lambda: {},
     interval: float = 2.0,
-    ticks: Optional[int] = None,
+    ticks: int | None = None,
 ) -> None:
     """Poll state, diff it against the previous observation, and put the
     resulting events on `queue`. Stops after `ticks` polls if given."""
-    prev: Optional[dict] = None
+    prev: dict | None = None
     prev_agents: dict = {}
     count = 0
     while ticks is None or count < ticks:

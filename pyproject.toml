@@ -37,3 +37,18 @@ packages = ["src/friday"]
 dev = [
     "pytest>=9.1.1",
 ]
+
+[tool.ruff]
+line-length = 100
+extend-exclude = ["training", "tools"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = [
+    "E501",   # SYSTEM_PROMPT and tool descriptions are cached-prefix bytes; never rewrap them
+    "UP031",  # printf-style formatting is fine in test diagnostics
+    "UP042",  # (str, Enum) -> StrEnum changes str() output that callers print
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["friday"]

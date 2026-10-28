@@ -12,7 +12,6 @@ from friday.audio.capture import (  # noqa: F401
     AudioFrame,
     AudioSubscription,
 )
-
 from friday.audio.manager import (  # noqa: F401
     AudioResourceManager,
     MicState,

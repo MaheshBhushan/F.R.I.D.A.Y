@@ -10,8 +10,9 @@ from __future__ import annotations
 import asyncio
 import time
 import wave
+from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import Any, AsyncIterator, Optional
+from typing import Any
 
 import pytest
 
@@ -40,14 +41,14 @@ class FakeTransport:
     preroll/live seam can be asserted byte-exact."""
 
     def __init__(
-        self, events: list[tuple[float, TranscriptEvent]], config: Optional[dict] = None
+        self, events: list[tuple[float, TranscriptEvent]], config: dict | None = None
     ) -> None:
         self._events = events
         self.config = config or {}
         self.sent_audio = bytearray()
         self.closed = False
 
-    async def __aenter__(self) -> "FakeTransport":
+    async def __aenter__(self) -> FakeTransport:
         return self
 
     async def __aexit__(self, *exc_info: Any) -> None:
@@ -90,7 +91,7 @@ def _make_detection(
 ) -> WakeDetection:
     preroll = b"".join(live_chunks[:preroll_chunks])
     rest = live_chunks[preroll_chunks:]
-    live: "asyncio.Queue[Optional[bytes]]" = asyncio.Queue()
+    live: asyncio.Queue[bytes | None] = asyncio.Queue()
     for c in rest:
         live.put_nowait(c)
     live.put_nowait(None)

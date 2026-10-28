@@ -15,7 +15,6 @@ import pytest
 from friday.core.spans import start_turn
 from friday.router import RouteDecision, Tier, classify, classify_and_mark, dispatch_tier1
 
-
 # --- Criterion 3: routing correctness table ---------------------------------
 
 TIER1_CASES = [

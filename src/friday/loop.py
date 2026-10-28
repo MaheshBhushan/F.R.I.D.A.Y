@@ -36,10 +36,11 @@ import re
 import sys
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any
 
 from friday import brain, router
 from friday.audio import (
@@ -101,14 +102,14 @@ class Turn:
 
     turn_id: str
     transcript: str = ""
-    tier: Optional[str] = None
-    action: Optional[str] = None
+    tier: str | None = None
+    action: str | None = None
     reply: str = ""
     spoke: bool = False
     interrupted: bool = False
     escalated: bool = False
     preempted: bool = False
-    error: Optional[str] = None
+    error: str | None = None
     stages: dict = field(default_factory=dict)
 
 
@@ -123,22 +124,22 @@ class VoiceLoop:
     def __init__(
         self,
         *,
-        detector: Optional[wake.WakeWordDetector] = None,
-        stt_factory: Optional[Callable[[], Any]] = None,
-        tts_factory: Optional[Callable[[], Any]] = None,
-        llm_transport: Optional[brain.Transport] = None,
-        assembler: Optional[brain.ContextAssembler] = None,
-        memory: Optional[Any] = None,
-        session_memory: Optional[Any] = None,
-        approve: Optional[Any] = None,
-        audio: Optional[AudioResourceManager] = None,
-        capture: Optional[AudioCaptureService] = None,
+        detector: wake.WakeWordDetector | None = None,
+        stt_factory: Callable[[], Any] | None = None,
+        tts_factory: Callable[[], Any] | None = None,
+        llm_transport: brain.Transport | None = None,
+        assembler: brain.ContextAssembler | None = None,
+        memory: Any | None = None,
+        session_memory: Any | None = None,
+        approve: Any | None = None,
+        audio: AudioResourceManager | None = None,
+        capture: AudioCaptureService | None = None,
         play_ack: Callable[..., None] = ack_mod.play_ack,
-        audio_output: Optional[Any] = None,
+        audio_output: Any | None = None,
         spans_path: Path = DEFAULT_SPANS_PATH,
         speak_enabled: bool = True,
         follow_up: bool = True,
-        endpoint_config: Optional[stt.EndpointConfig] = None,
+        endpoint_config: stt.EndpointConfig | None = None,
     ) -> None:
         self._detector = detector
         self._stt_factory = stt_factory
@@ -158,13 +159,13 @@ class VoiceLoop:
         self._endpoint_config = endpoint_config or stt.EndpointConfig.from_env()
 
         self._mic_gate = tts.MicGate()
-        self._speaker: Optional[tts.TTSSpeaker] = None
-        self._turn_task: Optional[asyncio.Task] = None
-        self._stt_subscription: Optional[AudioSubscription] = None
-        self._interrupt_task: Optional[asyncio.Task] = None
+        self._speaker: tts.TTSSpeaker | None = None
+        self._turn_task: asyncio.Task | None = None
+        self._stt_subscription: AudioSubscription | None = None
+        self._interrupt_task: asyncio.Task | None = None
         self._hard_stop_lock = asyncio.Lock()
         self._ack_cancel = threading.Event()
-        self.mic_state: "MicState" = MicState.AVAILABLE
+        self.mic_state: MicState = MicState.AVAILABLE
         self.audio_state = AudioTurnState.IDLE
         self.invalidated = 0
         self.turns: list[Turn] = []
@@ -175,7 +176,7 @@ class VoiceLoop:
 
     # -- audio in ---------------------------------------------------------
 
-    async def run(self, stop: Optional[asyncio.Event] = None) -> None:
+    async def run(self, stop: asyncio.Event | None = None) -> None:
         """Handle turns for as long as the Audio Resource Manager allows.
 
         This method does not own the microphone and knows nothing about who
@@ -244,14 +245,14 @@ class VoiceLoop:
 
     # -- audio resource manager callbacks --------------------------------
 
-    def _set_audio_state(self, state: AudioTurnState, *, turn: Optional[str] = None) -> None:
+    def _set_audio_state(self, state: AudioTurnState, *, turn: str | None = None) -> None:
         if state is self.audio_state:
             return
         previous = self.audio_state
         self.audio_state = state
         events.emit("audio-state", frm=previous.value, to=state.value, turn=turn)
 
-    def _on_mic_state(self, state: "MicState", owners: list) -> None:
+    def _on_mic_state(self, state: MicState, owners: list) -> None:
         """Mirror the microphone state machine into the visible indicator."""
         self.mic_state = state
         if state is MicState.PREEMPTING:
@@ -266,7 +267,7 @@ class VoiceLoop:
             indicator.set_state(indicator.State.IDLE)
             events.emit("mic", "listening")
 
-    def _invalidate_turn(self, owners: list) -> "Optional[asyncio.Task[None]]":
+    def _invalidate_turn(self, owners: list) -> asyncio.Task[None] | None:
         """Discard the in-flight turn's incomplete utterance.
 
         A turn interrupted mid-sentence must never be resumed: "tell Codex to
@@ -328,7 +329,7 @@ class VoiceLoop:
             with contextlib.suppress(Exception):
                 self._detector.begin_stream()
 
-    async def _pump(self, frames: "Any", stop: asyncio.Event) -> None:
+    async def _pump(self, frames: Any, stop: asyncio.Event) -> None:
         """Feed captured frames through the detector until the source ends.
 
         Takes an async iterator rather than owning a device, so it can be
@@ -389,8 +390,8 @@ class VoiceLoop:
         self,
         detection: wake.WakeDetection,
         *,
-        subscription: Optional[AudioSubscription] = None,
-        span: Optional[TurnSpan] = None,
+        subscription: AudioSubscription | None = None,
+        span: TurnSpan | None = None,
     ) -> Turn:
         """Run one full turn. Never raises: a failed turn is recorded, not fatal."""
         span = span or TurnSpan("pending", turn_id=detection.turn_id or None, path=self._spans_path)
@@ -464,7 +465,7 @@ class VoiceLoop:
 
     async def _transcribe(
         self,
-        source: "wake.WakeDetection | AudioSubscription",
+        source: wake.WakeDetection | AudioSubscription,
         span: TurnSpan,
     ) -> str:
         """Drain one utterance into a final transcript, prewarming on interims."""
@@ -754,7 +755,7 @@ class VoiceLoop:
         await self._speak_stream(_one(), span, turn, None)
 
     async def _speak_stream(
-        self, stream, span: TurnSpan, turn: Turn, ack_task: Optional[asyncio.Task]
+        self, stream, span: TurnSpan, turn: Turn, ack_task: asyncio.Task | None
     ) -> None:
         if not self._speak_enabled or self._tts_factory is None:
             # Still drain the stream: it is what drives tool calls and spans.
@@ -909,7 +910,7 @@ def build_live(*, speak: bool = True) -> VoiceLoop:
     )
 
 
-def main(argv: Optional[list[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m friday.loop")
     parser.add_argument(
         "--text",

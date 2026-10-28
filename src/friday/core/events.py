@@ -34,7 +34,7 @@ import os
 import sys
 import threading
 import time
-from typing import Any, Optional
+from typing import Any
 
 _LEVELS = {"silent": 0, "info": 1, "debug": 2}
 _ENV = "FRIDAY_LOG"
@@ -90,7 +90,7 @@ def debug(kind: str, message: str = "", **fields: Any) -> None:
     emit(kind, message, level="debug", **fields)
 
 
-def quote(text: Optional[str], limit: int = 120) -> str:
+def quote(text: str | None, limit: int = 120) -> str:
     """Render a transcript/reply on one line, truncated, so a multi-line
     reply cannot forge extra log entries."""
     if not text:

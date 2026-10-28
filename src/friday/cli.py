@@ -29,7 +29,6 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional
 
 from friday import daemon
 
@@ -52,7 +51,7 @@ def _tty() -> bool:
     return sys.stdout.isatty() and os.environ.get("NO_COLOR") is None
 
 
-def _mark(good: Optional[bool]) -> str:
+def _mark(good: bool | None) -> str:
     g, r, y, _, x = _colour(_tty())
     if good is None:
         return f"{y}·{x}"
@@ -233,7 +232,7 @@ def cmd_status(args: argparse.Namespace) -> int:
     return 0 if st.healthy else 1
 
 
-def _log_command(*, follow: bool, lines: int) -> Optional[list]:
+def _log_command(*, follow: bool, lines: int) -> list | None:
     """The command that emits the active supervisor's log, or None if there
     is no log to read yet."""
     if daemon.supervisor() is daemon.Supervisor.SYSTEMD:
@@ -371,11 +370,11 @@ def cmd_endpoint_test(args: argparse.Namespace) -> int:
 # ------------------------------------------------------------- interaction
 
 
-def _call(method: str, params: Optional[dict] = None, timeout: float = 120.0) -> Optional[dict]:
+def _call(method: str, params: dict | None = None, timeout: float = 120.0) -> dict | None:
     """One gateway call. None on any failure -- callers report their own errors."""
     from friday.gateway.client import GatewayClient
 
-    async def _run() -> Optional[dict]:
+    async def _run() -> dict | None:
         client = GatewayClient()
         try:
             await asyncio.wait_for(client.open(), timeout=5.0)
@@ -461,7 +460,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     # correct or a leak depends entirely on whether FRIDAY is running.
     st = daemon.status()
 
-    def check(label: str, good: Optional[bool], note: str = "") -> None:
+    def check(label: str, good: bool | None, note: str = "") -> None:
         nonlocal problems
         if good is False:
             problems += 1
@@ -564,7 +563,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     return 0
 
 
-def _run_ok(cmd: list[str]) -> Optional[str]:
+def _run_ok(cmd: list[str]) -> str | None:
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=5.0, check=False)
     except (OSError, subprocess.SubprocessError):
@@ -803,7 +802,7 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: Optional[list[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         return args.func(args)

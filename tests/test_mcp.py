@@ -11,8 +11,7 @@ from pathlib import Path
 import pytest
 
 from friday import permissions
-from friday.tools import execute
-from friday.tools import forecast, mcp
+from friday.tools import execute, forecast, mcp
 
 
 def sync(fn):

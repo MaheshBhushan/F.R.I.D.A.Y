@@ -34,7 +34,7 @@ import json
 import os
 import sys
 import time
-from typing import Any, Optional
+from typing import Any
 
 from friday.gateway.protocol import PROTOCOL_MAX, PROTOCOL_MIN
 
@@ -45,16 +45,16 @@ REQUEST_TIMEOUT_S = 30.0
 class GatewayClient:
     """One connection to a gateway. Not thread-safe; use one per task."""
 
-    def __init__(self, url: str = DEFAULT_URL, token: Optional[str] = None) -> None:
+    def __init__(self, url: str = DEFAULT_URL, token: str | None = None) -> None:
         self.url = url
         self._token = token
         self._socket: Any = None
         self._pending: dict[str, asyncio.Future] = {}
         self._events: list[tuple[str, dict]] = []
-        self._reader: Optional[asyncio.Task] = None
+        self._reader: asyncio.Task | None = None
         self._next = 0
 
-    async def __aenter__(self) -> "GatewayClient":
+    async def __aenter__(self) -> GatewayClient:
         await self.open()
         return self
 
@@ -107,7 +107,7 @@ class GatewayClient:
                     future.set_exception(ConnectionError("gateway closed the socket"))
             self._pending.clear()
 
-    async def request(self, method: str, params: Optional[dict] = None,
+    async def request(self, method: str, params: dict | None = None,
                       timeout: float = REQUEST_TIMEOUT_S) -> dict:
         """Send one request and await its reply. Returns the raw envelope."""
         self._next += 1
@@ -119,7 +119,7 @@ class GatewayClient:
         )
         try:
             return await asyncio.wait_for(future, timeout=timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self._pending.pop(ident, None)
             raise
 
@@ -139,7 +139,7 @@ class GatewayClient:
         return list(self._events)
 
 
-async def smoke(url: str, token: Optional[str], *, ask: Optional[str],
+async def smoke(url: str, token: str | None, *, ask: str | None,
                 wait: float = 0.0) -> int:
     """Walk the stages in dependency order, reporting the first failure.
 
@@ -212,7 +212,7 @@ async def smoke(url: str, token: Optional[str], *, ask: Optional[str],
         await client.close()
 
 
-def main(argv: Optional[list[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m friday.gateway.client")
     parser.add_argument("--url", default=DEFAULT_URL)
     parser.add_argument("--token", default=None,

@@ -32,10 +32,10 @@ REFLEX_STAGES = (
 # A module-level slot rather than a constructor argument because the two loops
 # are started as independent siblings: neither may block on the other existing,
 # and the gateway must come up even when the voice loop never does.
-_LIVE_LOOP: "object | None" = None
+_LIVE_LOOP: object | None = None
 
 
-def live_loop() -> "object | None":
+def live_loop() -> object | None:
     """The running VoiceLoop, or None if it never started or has stopped."""
     return _LIVE_LOOP
 

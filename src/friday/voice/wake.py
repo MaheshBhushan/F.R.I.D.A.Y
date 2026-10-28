@@ -25,7 +25,6 @@ import wave
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 from openwakeword.model import Model
@@ -68,7 +67,7 @@ def default_models() -> tuple[str, ...]:
     return tuple(name.strip() for name in raw.split(",") if name.strip())
 
 
-def resolve_models(names: "tuple[str, ...]") -> tuple[str, ...]:
+def resolve_models(names: tuple[str, ...]) -> tuple[str, ...]:
     """Turn wake-model names into what openwakeword's Model() accepts.
 
     A name matching a file in MODELS_DIR becomes that path; anything else is
@@ -139,7 +138,7 @@ class WakeDetection:
     preroll: bytes
     preroll_samples: int
     preroll_seconds: float
-    live: "asyncio.Queue[Optional[bytes]]" = field(repr=False)
+    live: asyncio.Queue[bytes | None] = field(repr=False)
 
 
 class WakeWordDetector:
@@ -147,7 +146,7 @@ class WakeWordDetector:
 
     def __init__(
         self,
-        model_names: Optional[tuple[str, ...]] = None,
+        model_names: tuple[str, ...] | None = None,
         threshold: float = DEFAULT_THRESHOLD,
         preroll_chunks: int = PREROLL_CHUNKS,
         inference_framework: str = "onnx",
@@ -168,7 +167,7 @@ class WakeWordDetector:
         events.emit("wake-init", models=",".join(self.model_names),
                     threshold=threshold, warmup=warmup_chunks)
         self._ring: deque[bytes] = deque(maxlen=preroll_chunks)
-        self._active_live: Optional["asyncio.Queue[Optional[bytes]]"] = None
+        self._active_live: asyncio.Queue[bytes | None] | None = None
 
     def _shrink_raw_buffer(self) -> None:
         """Right-size openWakeWord's raw-audio deque (see RAW_BUFFER_SECONDS).
@@ -198,7 +197,7 @@ class WakeWordDetector:
         self._fed = 0
         self._ring.clear()
 
-    def feed_chunk(self, chunk: bytes, span: Optional[TurnSpan] = None) -> Optional[WakeDetection]:
+    def feed_chunk(self, chunk: bytes, span: TurnSpan | None = None) -> WakeDetection | None:
         """Feed one CHUNK_SAMPLES-sized frame of raw int16 PCM.
 
         If a live handoff is in progress (post-detection), the frame is
@@ -212,7 +211,7 @@ class WakeWordDetector:
 
         return self._detect(chunk, span=span, handoff=True)
 
-    def detect_chunk(self, chunk: bytes, span: Optional[TurnSpan] = None) -> Optional[WakeDetection]:
+    def detect_chunk(self, chunk: bytes, span: TurnSpan | None = None) -> WakeDetection | None:
         """Detect without creating a second audio handoff.
 
         The assembled loop uses AudioCaptureService for pre-roll and live
@@ -224,9 +223,9 @@ class WakeWordDetector:
         self,
         chunk: bytes,
         *,
-        span: Optional[TurnSpan],
+        span: TurnSpan | None,
         handoff: bool,
-    ) -> Optional[WakeDetection]:
+    ) -> WakeDetection | None:
 
         self._ring.append(chunk)
         frame = np.frombuffer(chunk, dtype=np.int16)
@@ -251,7 +250,7 @@ class WakeWordDetector:
                 preroll = b"".join(self._ring)
                 events.emit("wake", model=name, score=float(score),
                             preroll=f"{(len(preroll) // 2) / SAMPLE_RATE:.2f}s")
-                live: "asyncio.Queue[Optional[bytes]]" = asyncio.Queue()
+                live: asyncio.Queue[bytes | None] = asyncio.Queue()
                 if handoff:
                     self._active_live = live
                 return WakeDetection(
@@ -266,7 +265,7 @@ class WakeWordDetector:
                 )
         return None
 
-    def end_handoff(self, live: "Optional[asyncio.Queue[Optional[bytes]]]" = None) -> None:
+    def end_handoff(self, live: asyncio.Queue[bytes | None] | None = None) -> None:
         """Signal the current live queue is done and resume wake detection.
 
         Pass `live` to make the release detection-scoped. Turns can overlap
@@ -284,7 +283,7 @@ class WakeWordDetector:
         self._ring.clear()
 
 
-async def capture_loop(detector: WakeWordDetector, on_detection, span: Optional[TurnSpan] = None) -> None:
+async def capture_loop(detector: WakeWordDetector, on_detection, span: TurnSpan | None = None) -> None:
     """Continuously capture mic audio and feed it through `detector`."""
     from friday.audio import AudioCaptureService, AudioResourceManager
     from friday.voice import indicator
@@ -313,7 +312,7 @@ async def capture_loop(detector: WakeWordDetector, on_detection, span: Optional[
 
 
 async def probe(seconds: float = 20.0, threshold: float = DEFAULT_THRESHOLD,
-                models: "Optional[tuple[str, ...]]" = None) -> int:
+                models: tuple[str, ...] | None = None) -> int:
     """Live mic probe: print input level and wake score once a second.
 
     This exists because "the wake word does not work" has three completely
@@ -344,7 +343,7 @@ async def probe(seconds: float = 20.0, threshold: float = DEFAULT_THRESHOLD,
     print(f"{'time':>5}  {'level':>6}  {'score':>6}  best-model")
 
     loop = asyncio.get_running_loop()
-    queue: "asyncio.Queue[bytes]" = asyncio.Queue()
+    queue: asyncio.Queue[bytes] = asyncio.Queue()
     sd.default.device = None
 
     def _callback(indata, frames, time_info, status) -> None:
@@ -363,7 +362,7 @@ async def probe(seconds: float = 20.0, threshold: float = DEFAULT_THRESHOLD,
                 break
             try:
                 chunk = await asyncio.wait_for(queue.get(), timeout=seconds - elapsed)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 break
             frame = np.frombuffer(chunk, dtype=np.int16).astype(np.float32)
             level = float(np.sqrt(np.mean(frame * frame))) if frame.size else 0.0

@@ -25,7 +25,6 @@ import re
 import sqlite3
 import time
 from pathlib import Path
-from typing import Optional
 
 DEFAULT_DB_PATH = Path.home() / ".friday" / "memory.db"
 
@@ -89,7 +88,7 @@ def _check_fts5(conn: sqlite3.Connection) -> None:
 _FTS_TOKEN_RE = re.compile(r"[A-Za-z0-9_]+")
 
 
-def _fts_query(raw: str) -> Optional[str]:
+def _fts_query(raw: str) -> str | None:
     """Turn free-text user input into a safe FTS5 MATCH query: every token
     double-quoted (which disables FTS5 operator syntax for it) and ANDed.
     Returns None if there are no indexable tokens."""
@@ -123,7 +122,7 @@ class Memory:
         kind: str = "episodic",
         project: str = "",
         importance: float = 0.0,
-        created_at: Optional[float] = None,
+        created_at: float | None = None,
     ) -> int:
         """Persist one raw event/turn. Returns its row id."""
         if kind not in KINDS:
@@ -144,7 +143,7 @@ class Memory:
         *,
         project: str = "",
         importance: float = 0.0,
-        created_at: Optional[float] = None,
+        created_at: float | None = None,
     ) -> int:
         """Replace `raw_ids` with one semantic summary row. The raw rows are
         marked `superseded_by` (not deleted) and excluded from retrieval."""
@@ -168,8 +167,8 @@ class Memory:
         self,
         query: str,
         *,
-        project: Optional[str] = None,
-        since: Optional[float] = None,
+        project: str | None = None,
+        since: float | None = None,
         limit: int = 5,
     ) -> list[sqlite3.Row]:
         """Relevance-ranked (BM25) rows, filtered by project/recency,

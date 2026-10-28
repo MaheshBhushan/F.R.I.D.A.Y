@@ -18,7 +18,6 @@ import pytest
 
 from friday import cli, daemon
 
-
 # ------------------------------------------------------------ pid handling
 
 def test_stale_pid_file_is_cleaned_and_not_signalled(tmp_path, monkeypatch):

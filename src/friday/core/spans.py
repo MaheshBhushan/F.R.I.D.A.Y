@@ -19,7 +19,6 @@ import threading
 import time
 import uuid
 from pathlib import Path
-from typing import Optional
 
 STAGES = (
     "wake_detected",
@@ -53,7 +52,7 @@ def active_spans_dir(path: Path) -> Path:
 class TurnSpan:
     """Records nanosecond-offset stage marks for a single interaction turn."""
 
-    def __init__(self, turn_kind: str, turn_id: Optional[str] = None,
+    def __init__(self, turn_kind: str, turn_id: str | None = None,
                  path: Path = DEFAULT_SPANS_PATH) -> None:
         self.turn_kind = turn_kind
         self.turn_id = turn_id or uuid.uuid4().hex
@@ -119,7 +118,7 @@ class TurnSpan:
                 from friday.core import events
                 events.emit("metrics", "checkpoint cleanup failed", error=str(exc))
 
-    def __enter__(self) -> "TurnSpan":
+    def __enter__(self) -> TurnSpan:
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
@@ -127,7 +126,7 @@ class TurnSpan:
         return None
 
 
-def start_turn(turn_kind: str, turn_id: Optional[str] = None,
+def start_turn(turn_kind: str, turn_id: str | None = None,
                path: Path = DEFAULT_SPANS_PATH) -> TurnSpan:
     """Convenience factory matching `with start_turn(...) as t: t.mark(...)`."""
     return TurnSpan(turn_kind=turn_kind, turn_id=turn_id, path=path)

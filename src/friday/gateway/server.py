@@ -34,20 +34,19 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import json
 import os
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable, Optional
+from typing import Any
 
-from friday.gateway import auth as gauth
 from friday.core import events
+from friday.gateway import auth as gauth
 from friday.gateway.protocol import (
     PROTOCOL_MAX,
     PROTOCOL_MIN,
     ErrorCode,
     ProtocolError,
-    Request,
     err,
     event,
     negotiate,
@@ -99,10 +98,10 @@ class Gateway:
         self,
         *,
         loop_ref: Callable[[], Any] = lambda: None,
-        token: Optional[str] = None,
+        token: str | None = None,
         host: str = DEFAULT_HOST,
         port: int = DEFAULT_PORT,
-        limiter: Optional[gauth.RateLimiter] = None,
+        limiter: gauth.RateLimiter | None = None,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._loop_ref = loop_ref
@@ -115,7 +114,7 @@ class Gateway:
         self._next_id = 0
         self._started_at = clock()
         self._server: Any = None
-        self._async_loop: Optional[asyncio.AbstractEventLoop] = None
+        self._async_loop: asyncio.AbstractEventLoop | None = None
         self._turns_served = 0
 
         self._methods: dict[str, Callable[[Client, dict], Awaitable[dict]]] = {
@@ -169,7 +168,7 @@ class Gateway:
 
     # ------------------------------------------------------------------- events
 
-    def _on_indicator(self, state: "indicator.State", detail: str) -> None:
+    def _on_indicator(self, state: indicator.State, detail: str) -> None:
         """Indicator observer. Runs on the *caller's* thread, which may not be
         the event loop's, so the actual send is hopped across with
         call_soon_threadsafe rather than touched directly."""
@@ -221,7 +220,7 @@ class Gateway:
     async def _serve_client(self, client: Client, socket: Any) -> None:
         try:
             first = await asyncio.wait_for(socket.recv(), timeout=HANDSHAKE_TIMEOUT_S)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             with contextlib.suppress(Exception):
                 await client.send(
                     err("-", ErrorCode.BAD_REQUEST, "handshake timed out")

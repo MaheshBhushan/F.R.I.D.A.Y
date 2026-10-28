@@ -1,7 +1,6 @@
 """The wake model is configurable because the only two pretrained models are
 "alexa" and "hey_jarvis" -- neither of which is "friday"."""
 
-import pytest
 
 from friday.voice import wake
 

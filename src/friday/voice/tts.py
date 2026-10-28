@@ -24,7 +24,8 @@ import os
 import re
 import sys
 import time
-from typing import Any, AsyncIterator, Optional, Protocol
+from collections.abc import AsyncIterator
+from typing import Any, Protocol
 
 from friday.core.spans import TurnSpan
 from friday.voice import indicator
@@ -60,9 +61,9 @@ class SynthesisTransport(Protocol):
     DeepgramSpeakTransport (real) and FakeSynthesisTransport (tests).
     Injected, never branched on internally."""
 
-    async def __aenter__(self) -> "SynthesisTransport": ...
+    async def __aenter__(self) -> SynthesisTransport: ...
 
-    async def __aexit__(self, *exc_info: Any) -> Optional[bool]: ...
+    async def __aexit__(self, *exc_info: Any) -> bool | None: ...
 
     def synthesize(self, text: str) -> AsyncIterator[bytes]: ...
 
@@ -87,7 +88,7 @@ class DeepgramSpeakTransport:
         model: str = DEFAULT_TTS_VOICE,
         sample_rate: int = SAMPLE_RATE,
         encoding: str = "linear16",
-        extra_config: Optional[dict] = None,
+        extra_config: dict | None = None,
     ) -> None:
         from deepgram import AsyncDeepgramClient
 
@@ -101,12 +102,12 @@ class DeepgramSpeakTransport:
         self._connect_cm = None
         self._connection = None
 
-    async def __aenter__(self) -> "DeepgramSpeakTransport":
+    async def __aenter__(self) -> DeepgramSpeakTransport:
         self._connect_cm = self._client.speak.v1.connect(**self.config)
         self._connection = await self._connect_cm.__aenter__()
         return self
 
-    async def __aexit__(self, *exc_info: Any) -> Optional[bool]:
+    async def __aexit__(self, *exc_info: Any) -> bool | None:
         if self._connect_cm is not None:
             await self._connect_cm.__aexit__(*exc_info)
         return None
@@ -139,10 +140,10 @@ class FakeSynthesisTransport:
         self.bytes_per_sentence = bytes_per_sentence
         self.synthesized: list[str] = []
 
-    async def __aenter__(self) -> "FakeSynthesisTransport":
+    async def __aenter__(self) -> FakeSynthesisTransport:
         return self
 
-    async def __aexit__(self, *exc_info: Any) -> Optional[bool]:
+    async def __aexit__(self, *exc_info: Any) -> bool | None:
         return None
 
     async def synthesize(self, text: str) -> AsyncIterator[bytes]:
@@ -204,7 +205,7 @@ class _Rechunker:
             del self._buf[: self._chunk_bytes]
         return chunks
 
-    def flush(self) -> Optional[bytes]:
+    def flush(self) -> bytes | None:
         if not self._buf:
             return None
         pad = self._chunk_bytes - len(self._buf)
@@ -250,9 +251,9 @@ class TTSSpeaker:
         self,
         transport: SynthesisTransport,
         *,
-        output: Optional[AudioOutput] = None,
+        output: AudioOutput | None = None,
         chunk_bytes: int = CHUNK_BYTES,
-        mic_gate: Optional[MicGate] = None,
+        mic_gate: MicGate | None = None,
     ) -> None:
         self._transport = transport
         self._owns_output = output is None
@@ -264,15 +265,15 @@ class TTSSpeaker:
         # Bounded so a fast synthesizer can't dump an entire utterance into
         # the queue before playback (and a preempt) get a chance to run --
         # backpressure keeps the generation task genuinely in-flight.
-        self._audio_queue: "asyncio.Queue[Optional[bytes]]" = asyncio.Queue(maxsize=8)
+        self._audio_queue: asyncio.Queue[bytes | None] = asyncio.Queue(maxsize=8)
         self._stop_event = asyncio.Event()
-        self._gen_task: Optional[asyncio.Task] = None
-        self._player_task: Optional[asyncio.Task] = None
+        self._gen_task: asyncio.Task | None = None
+        self._player_task: asyncio.Task | None = None
         self.is_speaking = False
         self.stopped = False
-        self.last_write_time: Optional[float] = None
+        self.last_write_time: float | None = None
 
-    async def speak(self, text_stream: AsyncIterator[str], *, span: Optional[TurnSpan] = None) -> None:
+    async def speak(self, text_stream: AsyncIterator[str], *, span: TurnSpan | None = None) -> None:
         """Consume `text_stream`, splitting on sentence boundaries, and play
         each sentence's audio as soon as it is synthesized -- overlapping
         with later tokens still arriving. Returns once playback of the whole
@@ -282,7 +283,7 @@ class TTSSpeaker:
         # after speak() has already reassigned these attributes, so a task that
         # reads self._audio_queue in its teardown would push its sentinel into
         # the NEW utterance's queue and stall it.
-        queue: "asyncio.Queue[Optional[bytes]]" = asyncio.Queue(maxsize=8)
+        queue: asyncio.Queue[bytes | None] = asyncio.Queue(maxsize=8)
         stop_event = asyncio.Event()
         self._audio_queue = queue
         self._stop_event = stop_event
@@ -326,8 +327,8 @@ class TTSSpeaker:
     async def _generate(
         self,
         text_stream: AsyncIterator[str],
-        span: Optional[TurnSpan],
-        queue: "asyncio.Queue[Optional[bytes]]",
+        span: TurnSpan | None,
+        queue: asyncio.Queue[bytes | None],
         stop_event: asyncio.Event,
     ) -> None:
         rechunker = _Rechunker(self._chunk_bytes)
@@ -365,8 +366,8 @@ class TTSSpeaker:
         self,
         sentence: str,
         rechunker: _Rechunker,
-        span: Optional[TurnSpan],
-        queue: "asyncio.Queue[Optional[bytes]]",
+        span: TurnSpan | None,
+        queue: asyncio.Queue[bytes | None],
         stop_event: asyncio.Event,
     ) -> None:
         async for raw in self._transport.synthesize(sentence):
@@ -381,7 +382,7 @@ class TTSSpeaker:
 
     async def _play(
         self,
-        queue: "asyncio.Queue[Optional[bytes]]",
+        queue: asyncio.Queue[bytes | None],
         stop_event: asyncio.Event,
     ) -> None:
         while True:

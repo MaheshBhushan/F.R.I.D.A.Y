@@ -17,9 +17,10 @@ import re
 import sys
 import time
 import wave
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, AsyncIterator, Callable, Optional, Protocol
+from typing import Any, Protocol
 
 from friday.audio.capture import AudioSubscription
 from friday.core import events
@@ -52,7 +53,7 @@ class EndpointConfig:
             )
 
     @classmethod
-    def from_env(cls) -> "EndpointConfig":
+    def from_env(cls) -> EndpointConfig:
         names = {
             "vad_pause_ms": "FRIDAY_VAD_PAUSE_MS",
             "fast_ms": "FRIDAY_ENDPOINT_FAST_MS",
@@ -91,9 +92,9 @@ class SpeechSignal(Enum):
 class EndpointStats:
     resumed_pauses: int = 0
     longest_pause_ms: int = 0
-    utterance_started_at: Optional[float] = None
-    final_speech_at: Optional[float] = None
-    finalized_at: Optional[float] = None
+    utterance_started_at: float | None = None
+    final_speech_at: float | None = None
+    finalized_at: float | None = None
 
 
 _CONTINUATION_WORDS = frozenset(
@@ -146,19 +147,19 @@ class EndpointController:
         config: EndpointConfig,
         *,
         clock: Callable[[], float] = time.monotonic,
-        stats: Optional[EndpointStats] = None,
+        stats: EndpointStats | None = None,
     ) -> None:
         self.config = config
         self.clock = clock
         self.state = EndpointState.LISTENING
         self.transcript = ""
-        self.deadline: Optional[float] = None
-        self.absolute_deadline: Optional[float] = None
-        self.pause_started_at: Optional[float] = None
-        self.finalized_reason: Optional[str] = None
+        self.deadline: float | None = None
+        self.absolute_deadline: float | None = None
+        self.pause_started_at: float | None = None
+        self.finalized_reason: str | None = None
         self.stats = stats or EndpointStats()
 
-    def on_speech(self, signal: SpeechSignal, now: Optional[float] = None) -> Optional[str]:
+    def on_speech(self, signal: SpeechSignal, now: float | None = None) -> str | None:
         now = self.clock() if now is None else now
         if self.state is EndpointState.FINALIZED or signal is SpeechSignal.NONE:
             return self.finalized_reason
@@ -193,7 +194,7 @@ class EndpointController:
             self.state = EndpointState.SPEAKING
         return self.finalized_reason
 
-    def on_flux(self, event: "TranscriptEvent", now: Optional[float] = None) -> Optional[str]:
+    def on_flux(self, event: TranscriptEvent, now: float | None = None) -> str | None:
         now = self.clock() if now is None else now
         if event.text.strip():
             self.transcript = event.text.strip()
@@ -217,7 +218,7 @@ class EndpointController:
             return self.finalize("flux_eot", now)
         return None
 
-    def on_timeout(self, now: Optional[float] = None) -> Optional[str]:
+    def on_timeout(self, now: float | None = None) -> str | None:
         now = self.clock() if now is None else now
         if self.state is EndpointState.FINALIZED or self.deadline is None:
             return self.finalized_reason
@@ -228,7 +229,7 @@ class EndpointController:
             return self.finalize(reason, now)
         return None
 
-    def finalize(self, reason: str, now: Optional[float] = None) -> str:
+    def finalize(self, reason: str, now: float | None = None) -> str:
         if self.finalized_reason is not None:
             return self.finalized_reason
         now = self.clock() if now is None else now
@@ -277,8 +278,8 @@ class TranscriptEvent:
     is_final: bool
     speech_final: bool = False
     utterance_end: bool = False
-    turn_event: Optional[str] = None
-    eot_confidence: Optional[float] = None
+    turn_event: str | None = None
+    eot_confidence: float | None = None
     hard_stop: bool = False
 
 
@@ -309,9 +310,9 @@ class Transport(Protocol):
     """Minimal async streaming STT transport, implemented by DeepgramTransport
     (real) and a fake in tests. Injected, never branched on internally."""
 
-    async def __aenter__(self) -> "Transport": ...
+    async def __aenter__(self) -> Transport: ...
 
-    async def __aexit__(self, *exc_info: Any) -> Optional[bool]: ...
+    async def __aexit__(self, *exc_info: Any) -> bool | None: ...
 
     async def send_media(self, chunk: bytes) -> None: ...
 
@@ -352,7 +353,7 @@ class DeepgramTransport:
         sample_rate: int = SAMPLE_RATE,
         eot_timeout_ms: int = DEFAULT_EOT_TIMEOUT_MS,
         eot_threshold: float = DEFAULT_EOT_THRESHOLD,
-        extra_config: Optional[dict] = None,
+        extra_config: dict | None = None,
     ) -> None:
         from deepgram import AsyncDeepgramClient
 
@@ -367,13 +368,13 @@ class DeepgramTransport:
         }
         self._connect_cm = None
         self._connection = None
-        self._listen_task: Optional[asyncio.Task] = None
+        self._listen_task: asyncio.Task | None = None
         # None is the end-of-stream sentinel: Deepgram's socket closing (or
         # send_close_stream being acknowledged) has to terminate iteration,
         # otherwise a consumer awaits a queue that will never fill again.
-        self._queue: "asyncio.Queue[Optional[TranscriptEvent]]" = asyncio.Queue()
+        self._queue: asyncio.Queue[TranscriptEvent | None] = asyncio.Queue()
 
-    async def __aenter__(self) -> "DeepgramTransport":
+    async def __aenter__(self) -> DeepgramTransport:
         from deepgram.core.events import EventType
 
         self._connect_cm = self._client.listen.v2.connect(**self.config)
@@ -419,7 +420,7 @@ class DeepgramTransport:
                 return
             yield event
 
-    async def __aexit__(self, *exc_info: Any) -> Optional[bool]:
+    async def __aexit__(self, *exc_info: Any) -> bool | None:
         if self._listen_task is not None:
             self._listen_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -451,7 +452,7 @@ class FluxTransportPool:
         self._ttl = ttl_seconds
         self._transport_factory = transport_factory
         self._config = config
-        self._warm_task: Optional[asyncio.Task] = None
+        self._warm_task: asyncio.Task | None = None
 
     def prewarm(self) -> None:
         if self._warm_task is None:
@@ -462,7 +463,7 @@ class FluxTransportPool:
         await transport.__aenter__()
         return transport, time.monotonic()
 
-    def __call__(self) -> "_FluxLease":
+    def __call__(self) -> _FluxLease:
         return _FluxLease(self)
 
     async def _acquire(self) -> DeepgramTransport:
@@ -492,13 +493,13 @@ class FluxTransportPool:
 class _FluxLease:
     def __init__(self, pool: FluxTransportPool) -> None:
         self._pool = pool
-        self._transport: Optional[DeepgramTransport] = None
+        self._transport: DeepgramTransport | None = None
 
     async def __aenter__(self) -> DeepgramTransport:
         self._transport = await self._pool._acquire()
         return self._transport
 
-    async def __aexit__(self, *exc_info: Any) -> Optional[bool]:
+    async def __aexit__(self, *exc_info: Any) -> bool | None:
         assert self._transport is not None
         try:
             return await self._transport.__aexit__(*exc_info)
@@ -543,13 +544,13 @@ class LocalVAD:
 
 
 async def run_utterance(
-    source: "WakeDetection | AudioSubscription",
-    transport: Optional[Transport],
+    source: WakeDetection | AudioSubscription,
+    transport: Transport | None,
     *,
-    span: Optional[TurnSpan] = None,
-    vad: Optional[LocalVAD] = None,
-    endpoint_config: Optional[EndpointConfig] = None,
-    endpoint_stats: Optional[EndpointStats] = None,
+    span: TurnSpan | None = None,
+    vad: LocalVAD | None = None,
+    endpoint_config: EndpointConfig | None = None,
+    endpoint_stats: EndpointStats | None = None,
     clock: Callable[[], float] = time.monotonic,
 ) -> AsyncIterator[TranscriptEvent]:
     """Stream one semantic turn, preserving audio through thinking pauses.
@@ -565,7 +566,7 @@ async def run_utterance(
     vad = vad or LocalVAD(silence_ms=config.vad_pause_ms)
     endpoint = EndpointController(config, clock=clock, stats=endpoint_stats)
     hard_stop_matcher = HardStopMatcher()
-    out_queue: "asyncio.Queue[Any]" = asyncio.Queue()
+    out_queue: asyncio.Queue[Any] = asyncio.Queue()
     audio_done = asyncio.Event()
     got_final = asyncio.Event()
     finalized = asyncio.Event()
@@ -736,7 +737,7 @@ def _detection_from_wav(path: str, turn_id: str = "cli") -> WakeDetection:
     chunks = [raw[i : i + frame_bytes] for i in range(0, len(raw), frame_bytes)]
     preroll_chunks = max(1, int(PREROLL_SECONDS * SAMPLE_RATE) // CHUNK_SAMPLES)
     preroll = b"".join(chunks[:preroll_chunks])
-    live: "asyncio.Queue[Optional[bytes]]" = asyncio.Queue()
+    live: asyncio.Queue[bytes | None] = asyncio.Queue()
     for chunk in chunks[preroll_chunks:]:
         live.put_nowait(chunk)
     live.put_nowait(None)

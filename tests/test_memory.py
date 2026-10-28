@@ -10,12 +10,8 @@ from __future__ import annotations
 import asyncio
 import functools
 import random
-import sqlite3
 import time
 
-import pytest
-
-from friday import brain
 from friday.brain import FakeLLMTransport, ScriptedTurn, TurnResult, complete, ordered_blocks
 from friday.memory import MAX_RETRIEVE_CHARS, Memory
 
@@ -40,7 +36,7 @@ def _seed_corpus(mem: Memory, *, n: int = 200) -> dict:
     filler_verbs = ["debugged", "refactored", "profiled", "reviewed", "deployed"]
     filler_nouns = ["the parser", "the scheduler", "a flaky test", "the config loader"]
 
-    for i in range(n):
+    for _ in range(n):
         project = rng.choice(PROJECTS)
         days_ago = rng.uniform(0, 40)
         text = f"{rng.choice(filler_verbs)} {rng.choice(filler_nouns)} on {project}"

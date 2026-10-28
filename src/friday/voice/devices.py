@@ -10,7 +10,6 @@ from __future__ import annotations
 import os
 import subprocess
 from dataclasses import dataclass
-from typing import Optional
 
 # Stable hardware endpoints used by input capture and the optional legacy
 # echo-canceller. Normal playback deliberately does not use SPEAKER_SINK.
@@ -27,8 +26,8 @@ DEVICE = "pulse"
 
 @dataclass
 class Routing:
-    sink: Optional[str]
-    source: Optional[str]
+    sink: str | None
+    source: str | None
     degraded: bool
     reason: str
 
@@ -64,7 +63,7 @@ def resolve() -> Routing:
     )
 
 
-def apply(routing: Optional[Routing] = None) -> Routing:
+def apply(routing: Routing | None = None) -> Routing:
     """Apply input selection while leaving playback on the system default."""
     routing = routing or resolve()
     os.environ.pop("PULSE_SINK", None)

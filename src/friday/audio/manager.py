@@ -38,8 +38,8 @@ import asyncio
 import contextlib
 import inspect
 import os
+from collections.abc import AsyncIterator, Awaitable, Callable
 from enum import Enum
-from typing import AsyncIterator, Awaitable, Callable, Optional
 
 from friday.audio.echocancel import EchoCancelModule
 from friday.audio.priority import FRIDAY_PRIORITY, Owner, parse_owners
@@ -81,15 +81,15 @@ class AudioResourceManager:
     def __init__(
         self,
         *,
-        own_pid: Optional[int] = None,
-        open_capture: Optional[Callable[[], "contextlib.AbstractAsyncContextManager"]] = None,
-        inspect: Optional[Callable[[], Awaitable[str]]] = None,
+        own_pid: int | None = None,
+        open_capture: Callable[[], contextlib.AbstractAsyncContextManager] | None = None,
+        inspect: Callable[[], Awaitable[str]] | None = None,
         recheck_seconds: float = RECHECK_SECONDS,
-        on_state: Optional[Callable[["MicState", list[Owner]], None]] = None,
-        on_preempt: Optional[Callable[[list[Owner]], Optional[Awaitable[None]]]] = None,
-        on_forget: Optional[Callable[[], None]] = None,
-        on_open: Optional[Callable[[], None]] = None,
-        echo_cancel: Optional[EchoCancelModule] = None,
+        on_state: Callable[[MicState, list[Owner]], None] | None = None,
+        on_preempt: Callable[[list[Owner]], Awaitable[None] | None] | None = None,
+        on_forget: Callable[[], None] | None = None,
+        on_open: Callable[[], None] | None = None,
+        echo_cancel: EchoCancelModule | None = None,
         manage_echo_cancel: bool = False,
     ) -> None:
         self._own_pid = own_pid if own_pid is not None else os.getpid()
@@ -107,7 +107,7 @@ class AudioResourceManager:
         self.free = asyncio.Event()
         self.free.set()
         self.taken = asyncio.Event()
-        self._watch_task: Optional[asyncio.Task] = None
+        self._watch_task: asyncio.Task | None = None
         # Loaded on demand so the echo canceller's nodes append to the END of
         # the device list instead of shifting every other capture device's
         # index. See friday.audio.echocancel for the incident that motivated it.
@@ -123,10 +123,10 @@ class AudioResourceManager:
     def set_callbacks(
         self,
         *,
-        on_state: Optional[Callable[["MicState", list[Owner]], None]] = None,
-        on_preempt: Optional[Callable[[list[Owner]], Optional[Awaitable[None]]]] = None,
-        on_forget: Optional[Callable[[], None]] = None,
-        on_open: Optional[Callable[[], None]] = None,
+        on_state: Callable[[MicState, list[Owner]], None] | None = None,
+        on_preempt: Callable[[list[Owner]], Awaitable[None] | None] | None = None,
+        on_forget: Callable[[], None] | None = None,
+        on_open: Callable[[], None] | None = None,
     ) -> None:
         """Bind the lifecycle owner when a manager is injected."""
         self._on_state = on_state
@@ -324,7 +324,7 @@ class AudioResourceManager:
                 self._enter(MicState.SUSPENDED)
 
 
-async def _anext(it: AsyncIterator[bytes]) -> Optional[bytes]:
+async def _anext(it: AsyncIterator[bytes]) -> bytes | None:
     try:
         return await it.__anext__()
     except StopAsyncIteration:
@@ -350,7 +350,7 @@ async def _sounddevice_capture(sample_rate: int = 16000,
     from friday.voice import devices
 
     loop = asyncio.get_running_loop()
-    queue: "asyncio.Queue[bytes]" = asyncio.Queue()
+    queue: asyncio.Queue[bytes] = asyncio.Queue()
 
     def _callback(indata, count, time_info, status) -> None:
         # Audio thread: hand off and return. Nothing expensive here.

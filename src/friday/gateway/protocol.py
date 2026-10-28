@@ -25,7 +25,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 # Bump MAX when adding a method or an event. Bump MIN only when dropping
 # support for an old shape -- that is the breaking change, and raising MIN is
@@ -105,7 +105,7 @@ def parse_request(raw: str | bytes) -> Request:
     return Request(id=ident, method=method, params=params)
 
 
-def ok(ident: str, result: Optional[dict[str, Any]] = None) -> str:
+def ok(ident: str, result: dict[str, Any] | None = None) -> str:
     return json.dumps({"id": ident, "ok": True, "result": result or {}})
 
 
@@ -115,7 +115,7 @@ def err(ident: str, code: ErrorCode, message: str) -> str:
     )
 
 
-def event(name: str, data: Optional[dict[str, Any]] = None) -> str:
+def event(name: str, data: dict[str, Any] | None = None) -> str:
     return json.dumps({"event": name, "data": data or {}})
 
 

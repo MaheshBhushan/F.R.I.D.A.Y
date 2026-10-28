@@ -7,8 +7,8 @@ import math
 import struct
 import time
 from collections import deque
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
-from typing import AsyncIterator, Callable, Optional
 
 from friday.audio.manager import AudioResourceManager
 
@@ -44,11 +44,11 @@ class AudioSubscription:
     def __init__(
         self,
         snapshot: tuple[AudioFrame, ...],
-        remove: Callable[["AudioSubscription"], None],
+        remove: Callable[[AudioSubscription], None],
     ) -> None:
         self._snapshot = snapshot
         self._pending = deque(snapshot)
-        self._queue: "asyncio.Queue[Optional[AudioFrame]]" = asyncio.Queue()
+        self._queue: asyncio.Queue[AudioFrame | None] = asyncio.Queue()
         self._remove = remove
         self._closed = False
 
@@ -56,7 +56,7 @@ class AudioSubscription:
     def snapshot(self) -> tuple[AudioFrame, ...]:
         return self._snapshot
 
-    def __aiter__(self) -> "AudioSubscription":
+    def __aiter__(self) -> AudioSubscription:
         return self
 
     async def __anext__(self) -> AudioFrame:
@@ -69,7 +69,7 @@ class AudioSubscription:
             raise StopAsyncIteration
         return frame
 
-    async def __aenter__(self) -> "AudioSubscription":
+    async def __aenter__(self) -> AudioSubscription:
         return self
 
     async def __aexit__(self, *exc_info) -> None:
