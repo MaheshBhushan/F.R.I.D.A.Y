@@ -29,11 +29,12 @@ from friday.tools.sanitize import safe_argv, safe_path
 from friday.tools import screenshot as _screenshot
 from friday.tools.websearch import web_search
 from friday.tools.forecast import SPEC as FORECAST_SPEC, query_forecast
+from friday.tools import outlook as _outlook
 
 # Tools whose results carry local file content into the conversation, and
 # tools that send conversation content to a third party. Once a turn has used
 # a source, the sinks stop auto-executing (see `execute(tainted=...)`).
-TAINT_SOURCES = frozenset({"read_file"})
+TAINT_SOURCES = frozenset({"read_file", "read_outlook_mail"})
 EXFIL_SINKS = frozenset({"web_search", "screenshot"})
 
 _UNIT_RE = re.compile(r"^[A-Za-z0-9_.@-]{1,128}$")
@@ -258,6 +259,8 @@ TOOLS: dict[str, Callable[..., Awaitable[str]]] = {
     "web_search": web_search,
     "screenshot": _screenshot.screenshot,
     "query_forecast": query_forecast,
+    "read_outlook_calendar": _outlook.read_outlook_calendar,
+    "read_outlook_mail": _outlook.read_outlook_mail,
 }
 
 # Order is load-bearing: `tools` is rendered before `system` and sits inside
@@ -404,6 +407,8 @@ TOOL_SPECS: list[dict] = [
     },
     _screenshot.SPEC,
     FORECAST_SPEC,
+    _outlook.CALENDAR_SPEC,
+    _outlook.MAIL_SPEC,
 ]
 
 

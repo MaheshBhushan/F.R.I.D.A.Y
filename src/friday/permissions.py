@@ -56,6 +56,10 @@ RISK: dict[str, Risk] = {
     # questions about the screen) and FRIDAY_SCREENSHOT=0.
     "screenshot": Risk.READ_ONLY,
     "query_forecast": Risk.READ_ONLY,
+    # Graph calls use a token limited to Calendars.Read and Mail.Read. Mail
+    # previews are untrusted text, so read_outlook_mail is also a taint source.
+    "read_outlook_calendar": Risk.READ_ONLY,
+    "read_outlook_mail": Risk.READ_ONLY,
 }
 
 AUTO_EXECUTE = frozenset({Risk.READ_ONLY, Risk.SAFE_REVERSIBLE})

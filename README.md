@@ -24,6 +24,7 @@ The key design choice is a three-tier router. Reflexes and machine-state queries
 - SQLite FTS5 long-term memory with bounded prompt retrieval
 - Gated local tools, screen capture for "what am I looking at" turns, and optional Exa web search
 - Optional [async MCP forecast queries](docs/mcp.md) with validated numerical summaries
+- Optional read-only Outlook calendar and inbox questions through Microsoft Graph, answered by voice
 - Microphone arbitration that yields to calls, meetings, and recording apps
 - Authenticated local WebSocket gateway and scriptable CLI
 - Direct daemon mode or systemd user-service operation
@@ -153,6 +154,31 @@ a model request. The review does not run tests. Review turns have no tools and
 cannot edit, stage, commit, or push files. The existing command allowlist remains
 unchanged.
 
+## Outlook calendar and mail
+
+Ask “what's on my calendar tomorrow” or “any unread mail from the recruiter” and
+FRIDAY answers by voice from Microsoft Graph. Two read-only tools serve these
+turns. `read_outlook_calendar` lists events for the next 1–14 days.
+`read_outlook_mail` lists up to 10 newest inbox messages, optionally unread only.
+Mail results contain sender, subject, received time and Graph's short preview.
+FRIDAY never requests full message bodies.
+
+Register a public-client app in Microsoft Entra ID with the delegated
+`Calendars.Read` and `Mail.Read` permissions, and enable public client flows.
+Set `FRIDAY_GRAPH_CLIENT_ID` (and `FRIDAY_GRAPH_TENANT` for a single-tenant app)
+in `~/.friday/env`, then sign in once with the device-code flow:
+
+```bash
+uv run python -m friday.tools.outlook login
+```
+
+The refresh token is stored in `~/.friday/graph_token.json` with mode 0600. The
+token's scopes cannot send, move or delete mail or events. Both tools are on the
+read-only allowlist tier. Mail text is untrusted input: `read_outlook_mail` is a
+taint source, so after it runs, `web_search` and `screenshot` need approval.
+The test suite replaces Graph with a fake transport. A live Microsoft 365 tenant
+has not been exercised by this repository.
+
 ## Safety model
 
 Tool names are explicitly allowlisted and mapped to a risk level:
@@ -194,6 +220,8 @@ deploy/          systemd user-service template
 | `DEEPGRAM_API_KEY` | Streaming STT and Aura TTS | required |
 | `ANTHROPIC_API_KEY` | Reasoning turns | required |
 | `EXA_API_KEY` | Optional web search | unset |
+| `FRIDAY_GRAPH_CLIENT_ID` | Entra ID public-client app for the read-only Outlook tools | unset |
+| `FRIDAY_GRAPH_TENANT` | Entra tenant ID or `common` | `common` |
 | `FRIDAY_WAKE_MODEL` | Comma-separated built-in names or custom model paths | `alexa` |
 | `FRIDAY_GATEWAY_HOST` | Gateway bind address | `127.0.0.1` |
 | `FRIDAY_GATEWAY_PORT` | Gateway port | `8765` |
@@ -226,7 +254,7 @@ uv run friday smoke
 uv run friday doctor
 ```
 
-External services are injected behind transport interfaces, so the automated suite does not make live Deepgram, Anthropic, or Exa requests. Hardware and live-credential checks are documented separately in [`GOLIVE.md`](GOLIVE.md).
+External services are injected behind transport interfaces, so the automated suite does not make live Deepgram, Anthropic, Exa, or Microsoft Graph requests. Hardware and live-credential checks are documented separately in [`GOLIVE.md`](GOLIVE.md).
 
 ## Known limitations
 
